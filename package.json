@@ -1,0 +1,14 @@
+{
+  "name": "grootai-root",
+  "version": "1.0.0",
+  "description": "GrootAi - Agentic Data Quality Platform inspired by Informatica CLAIRE + IDMC",
+  "scripts": {
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "eval": "cd server && npm run eval"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

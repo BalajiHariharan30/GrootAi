@@ -1,0 +1,177 @@
+[
+  {
+    "id": "eval_01",
+    "nlInput": "email must be valid and cannot be empty",
+    "expectedOperator": "email_valid",
+    "expectedField": "email",
+    "expectedCategory": "validity"
+  },
+  {
+    "id": "eval_02",
+    "nlInput": "phone number must match international format",
+    "expectedOperator": "phone_valid",
+    "expectedField": "phone",
+    "expectedCategory": "validity"
+  },
+  {
+    "id": "eval_03",
+    "nlInput": "taxId is mandatory and cannot be null",
+    "expectedOperator": "not_null",
+    "expectedField": "taxId",
+    "expectedCategory": "completeness"
+  },
+  {
+    "id": "eval_04",
+    "nlInput": "lifetimeValue must be positive and greater than 0",
+    "expectedOperator": "min",
+    "expectedField": "lifetimeValue",
+    "expectedCategory": "range"
+  },
+  {
+    "id": "eval_05",
+    "nlInput": "order amount must be positive and under 100000",
+    "expectedOperator": "range",
+    "expectedField": "totalAmount",
+    "expectedCategory": "range"
+  },
+  {
+    "id": "eval_06",
+    "nlInput": "discountPercent must be between 0 and 100",
+    "expectedOperator": "range",
+    "expectedField": "discountPercent",
+    "expectedCategory": "range"
+  },
+  {
+    "id": "eval_07",
+    "nlInput": "customerId must be unique across all rows",
+    "expectedOperator": "unique",
+    "expectedField": "customerId",
+    "expectedCategory": "uniqueness"
+  },
+  {
+    "id": "eval_08",
+    "nlInput": "accountStatus must be one of active, suspended, or pending_verification",
+    "expectedOperator": "in_set",
+    "expectedField": "accountStatus",
+    "expectedCategory": "consistency"
+  },
+  {
+    "id": "eval_09",
+    "nlInput": "country cannot be null",
+    "expectedOperator": "not_null",
+    "expectedField": "country",
+    "expectedCategory": "completeness"
+  },
+  {
+    "id": "eval_10",
+    "nlInput": "customerEmail must have valid syntax format",
+    "expectedOperator": "email_valid",
+    "expectedField": "customerEmail",
+    "expectedCategory": "validity"
+  },
+  {
+    "id": "eval_11",
+    "nlInput": "subtotal must be greater than 0",
+    "expectedOperator": "min",
+    "expectedField": "subtotal",
+    "expectedCategory": "range"
+  },
+  {
+    "id": "eval_12",
+    "nlInput": "postalCode must not be null and must be present",
+    "expectedOperator": "not_null",
+    "expectedField": "postalCode",
+    "expectedCategory": "completeness"
+  },
+  {
+    "id": "eval_13",
+    "nlInput": "currency must be one of USD, EUR, GBP",
+    "expectedOperator": "in_set",
+    "expectedField": "currency",
+    "expectedCategory": "consistency"
+  },
+  {
+    "id": "eval_14",
+    "nlInput": "orderId must be unique with no duplicates",
+    "expectedOperator": "unique",
+    "expectedField": "orderId",
+    "expectedCategory": "uniqueness"
+  },
+  {
+    "id": "eval_15",
+    "nlInput": "deliveryStatus must be delivered, shipped, or processing",
+    "expectedOperator": "in_set",
+    "expectedField": "deliveryStatus",
+    "expectedCategory": "consistency"
+  },
+  {
+    "id": "eval_16",
+    "nlInput": "taxAmount cannot be negative and must be under 5000",
+    "expectedOperator": "range",
+    "expectedField": "taxAmount",
+    "expectedCategory": "range"
+  },
+  {
+    "id": "eval_17",
+    "nlInput": "company name is mandatory",
+    "expectedOperator": "not_null",
+    "expectedField": "company",
+    "expectedCategory": "completeness"
+  },
+  {
+    "id": "eval_18",
+    "nlInput": "critical check: email must be valid RFC standard",
+    "expectedOperator": "email_valid",
+    "expectedField": "email",
+    "expectedCategory": "validity"
+  },
+  {
+    "id": "eval_19",
+    "nlInput": "shippingCountry must be present in every order",
+    "expectedOperator": "not_null",
+    "expectedField": "shippingCountry",
+    "expectedCategory": "completeness"
+  },
+  {
+    "id": "eval_20",
+    "nlInput": "fullName must not be empty",
+    "expectedOperator": "not_null",
+    "expectedField": "fullName",
+    "expectedCategory": "completeness"
+  },
+  {
+    "id": "eval_21",
+    "nlInput": "lifetimeValue must be less than 5000000",
+    "expectedOperator": "max",
+    "expectedField": "lifetimeValue",
+    "expectedCategory": "range"
+  },
+  {
+    "id": "eval_22",
+    "nlInput": "phone is required and must have valid international country code",
+    "expectedOperator": "phone_valid",
+    "expectedField": "phone",
+    "expectedCategory": "validity"
+  },
+  {
+    "id": "eval_23",
+    "nlInput": "taxId must be unique for each enterprise account",
+    "expectedOperator": "unique",
+    "expectedField": "taxId",
+    "expectedCategory": "uniqueness"
+  },
+  {
+    "id": "eval_24",
+    "nlInput": "totalAmount must be between 1 and 50000",
+    "expectedOperator": "range",
+    "expectedField": "totalAmount",
+    "expectedCategory": "range"
+  },
+  {
+    "id": "eval_25",
+    "nlInput": "discountPercent max 70 percent allowed",
+    "expectedOperator": "max",
+    "expectedField": "discountPercent",
+    "expectedCategory": "range"
+  }
+]
