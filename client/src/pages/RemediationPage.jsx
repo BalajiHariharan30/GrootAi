@@ -1,23 +1,20 @@
 /**
  * @module RemediationPage
- * @description Human-in-the-Loop (HITL) Remediation Center.
- *
- * Engineering decisions:
- *  • Strict HITL invariant: zero data mutations without explicit approval
- *  • `AnimatePresence` animates proposal cards in/out on queue changes
- *  • `react-hot-toast` provides non-blocking confirmation feedback
- *  • Empty state rendered with Framer Motion entrance animation
- *  • `StatusBadge` replaces ad-hoc inline badge styles
- *  • `PageTransition` wraps the whole page for consistent route animation
- *  • Audit log tab uses a virtualised-friendly overflow scroll container
+ * @description Human-in-the-Loop (HITL) Remediation Center — enhanced with:
+ *  • Summary stats bar (total / high / medium / low confidence counts)
+ *  • Confidence filter tabs (All / High / Medium / Low)
+ *  • Sort toggle (newest first / highest confidence first)
+ *  • "Approve All High-Confidence" batch action
+ *  • Export Audit Log to CSV via ExportService
  */
-import React, { useEffect, useState, useCallback, memo } from 'react';
-import { useSelector, useDispatch }                       from 'react-redux';
-import { motion, AnimatePresence }                        from 'framer-motion';
-import toast                                              from 'react-hot-toast';
-import PropTypes                                          from 'prop-types';
+import React, { useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { useSelector, useDispatch }                                from 'react-redux';
+import { motion, AnimatePresence }                                 from 'framer-motion';
+import toast                                                       from 'react-hot-toast';
+import PropTypes                                                   from 'prop-types';
 import {
-  UserCheck, History, CheckCircle2, GitCommit,
+  UserCheck, History, CheckCircle2, GitCommit, Download,
+  SortAsc, SortDesc, Zap, ShieldCheck,
 } from 'lucide-react';
 
 import {
@@ -29,11 +26,24 @@ import {
 import { RemediationProposalCard }   from '../components/RemediationProposalCard.jsx';
 import { StatusBadge }               from '../components/StatusBadge.jsx';
 import { PageTransition }            from '../components/PageTransition.jsx';
+import { ExportService }             from '../services/ExportService.js';
 
 // ---------------------------------------------------------------------------
-// Audit Log Row — memoised to prevent re-renders on unrelated state changes
+// Constants
 // ---------------------------------------------------------------------------
+const TAB_PENDING = 'pending';
+const TAB_AUDIT   = 'audit';
 
+const CONF_FILTERS = [
+  { key: 'all',    label: 'All',    color: 'slate-400' },
+  { key: 'high',   label: 'High',   color: 'brand-500' },
+  { key: 'medium', label: 'Medium', color: 'brand-amber' },
+  { key: 'low',    label: 'Low',    color: 'rose-400'  },
+];
+
+// ---------------------------------------------------------------------------
+// Audit Row
+// ---------------------------------------------------------------------------
 const AuditRow = memo(({ item, idx }) => (
   <motion.tr
     key={String(item._id ?? idx)}
@@ -60,55 +70,79 @@ const AuditRow = memo(({ item, idx }) => (
     </td>
   </motion.tr>
 ));
-
 AuditRow.displayName = 'AuditRow';
-AuditRow.propTypes   = {
-  item: PropTypes.object.isRequired,
-  idx:  PropTypes.number.isRequired,
-};
+AuditRow.propTypes   = { item: PropTypes.object.isRequired, idx: PropTypes.number.isRequired };
+
+// ---------------------------------------------------------------------------
+// Summary Stats Bar
+// ---------------------------------------------------------------------------
+function SummaryBar({ proposals }) {
+  const high   = proposals.filter((p) => (p.confidence ?? 0) >= 0.8).length;
+  const medium = proposals.filter((p) => (p.confidence ?? 0) >= 0.5 && (p.confidence ?? 0) < 0.8).length;
+  const low    = proposals.filter((p) => (p.confidence ?? 0) < 0.5).length;
+
+  const stats = [
+    { label: 'Total Pending', value: proposals.length, color: 'text-white' },
+    { label: 'High Confidence (≥80%)',   value: high,   color: 'text-brand-500'  },
+    { label: 'Medium (50–79%)',          value: medium, color: 'text-brand-amber' },
+    { label: 'Low (<50%)',               value: low,    color: 'text-rose-400'   },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {stats.map((s) => (
+        <div
+          key={s.label}
+          className="glass-panel p-3 rounded-xl border border-slate-800 text-center"
+        >
+          <p className={`text-xl font-extrabold font-mono ${s.color}`}>{s.value}</p>
+          <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{s.label}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-
-/** Active tab identifier type */
-const TAB_PENDING = 'pending';
-const TAB_AUDIT   = 'audit';
-
 export const RemediationPage = () => {
   const dispatch = useDispatch();
 
-  const { pendingList, auditLog, actionInProgressId } =
-    useSelector((s) => s.remediation);
+  const { pendingList, auditLog, actionInProgressId } = useSelector((s) => s.remediation);
+  const { user, isGuestMode } = useSelector((s) => s.auth);
 
-  const [activeTab, setActiveTab] = useState(TAB_PENDING);
+  const [activeTab,    setActiveTab]    = useState(TAB_PENDING);
+  const [confFilter,   setConfFilter]   = useState('all');
+  const [sortOrder,    setSortOrder]    = useState('newest'); // 'newest' | 'confidence'
+  const [batchLoading, setBatchLoading] = useState(false);
+
+  const approverName = isGuestMode ? 'Human Data Steward (Guest)' : (user?.name ?? 'Human Data Steward');
 
   useEffect(() => {
     dispatch(fetchPendingRemediations());
     dispatch(fetchAuditLog());
   }, [dispatch]);
 
-  // ── Approve ─────────────────────────────────────────────────────────────
+  // ── Approve ──────────────────────────────────────────────────────────────
   const handleApprove = useCallback(
     (remediationId) => {
       const promise = dispatch(
-        approveRemediation({ remediationId, approver: 'Human Data Steward (Admin)' }),
+        approveRemediation({ remediationId, approver: approverName }),
       ).unwrap();
-
       toast.promise(promise, {
         loading: 'Applying mutation and recording audit entry…',
         success: '✅ Mutation applied — audit trail updated.',
         error:   'Approval failed. Please try again.',
       });
     },
-    [dispatch],
+    [dispatch, approverName],
   );
 
-  // ── Reject ──────────────────────────────────────────────────────────────
+  // ── Reject ───────────────────────────────────────────────────────────────
   const handleReject = useCallback(
     (remediationId, reason) => {
       const promise = dispatch(rejectRemediation({ remediationId, reason })).unwrap();
-
       toast.promise(promise, {
         loading: 'Recording rejection in audit trail…',
         success: '🚫 Proposal rejected and logged.',
@@ -118,12 +152,59 @@ export const RemediationPage = () => {
     [dispatch],
   );
 
-  // ---------------------------------------------------------------------------
+  // ── Batch Approve All High-Confidence ───────────────────────────────────
+  const handleBatchApprove = useCallback(async () => {
+    const highConf = pendingList.filter((p) => (p.confidence ?? 0) >= 0.8);
+    if (!highConf.length) return;
+
+    setBatchLoading(true);
+    let approved = 0;
+    for (const p of highConf) {
+      try {
+        await dispatch(approveRemediation({
+          remediationId: String(p._id),
+          approver: approverName,
+        })).unwrap();
+        approved++;
+      } catch { /* skip individual failures */ }
+    }
+    setBatchLoading(false);
+    toast.success(`✅ Batch approved ${approved} high-confidence proposals.`);
+  }, [dispatch, pendingList, approverName]);
+
+  // ── Filtered + Sorted List ───────────────────────────────────────────────
+  const filteredList = useMemo(() => {
+    let list = [...pendingList];
+
+    // Filter
+    if (confFilter === 'high') {
+      list = list.filter((p) => (p.confidence ?? 0) >= 0.8);
+    } else if (confFilter === 'medium') {
+      list = list.filter((p) => (p.confidence ?? 0) >= 0.5 && (p.confidence ?? 0) < 0.8);
+    } else if (confFilter === 'low') {
+      list = list.filter((p) => (p.confidence ?? 0) < 0.5);
+    }
+
+    // Sort
+    if (sortOrder === 'confidence') {
+      list.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+    } else {
+      list.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0));
+    }
+
+    return list;
+  }, [pendingList, confFilter, sortOrder]);
+
+  const highConfCount = useMemo(
+    () => pendingList.filter((p) => (p.confidence ?? 0) >= 0.8).length,
+    [pendingList],
+  );
+
   return (
     <PageTransition>
-      <div className="space-y-8 pb-12">
+      <div className="space-y-6 pb-12">
 
-        {/* ── Page Header ───────────────────────────────────────────── */}
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -135,16 +216,10 @@ export const RemediationPage = () => {
               <h1 className="text-2xl font-extrabold text-white tracking-tight">
                 Human-in-the-Loop Remediation Center
               </h1>
-              <StatusBadge
-                label="Zero Autonomous Mutations"
-                variant="pending"
-                dot
-                pulse
-              />
+              <StatusBadge label="Zero Autonomous Mutations" variant="pending" dot pulse />
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Review AI agent proposals. Every mutation requires explicit human
-              approval and generates an immutable, tamper-evident audit log entry.
+              Review AI agent proposals. Every mutation requires explicit human approval and generates an immutable audit log entry.
             </p>
           </div>
 
@@ -170,8 +245,9 @@ export const RemediationPage = () => {
           </div>
         </motion.div>
 
-        {/* ── Tab: Pending Approvals ────────────────────────────────── */}
         <AnimatePresence mode="wait">
+
+          {/* ── Pending Approvals Tab ──────────────────────────────────── */}
           {activeTab === TAB_PENDING && (
             <motion.div
               key="pending"
@@ -181,22 +257,90 @@ export const RemediationPage = () => {
               transition={{ duration: 0.2 }}
               className="space-y-4"
             >
-              {pendingList.length === 0 ? (
+              {/* Summary Stats Bar */}
+              {pendingList.length > 0 && <SummaryBar proposals={pendingList} />}
+
+              {/* Controls: Confidence Filter + Sort + Batch */}
+              {pendingList.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Confidence filter pills */}
+                  <div className="flex items-center space-x-1 p-1 rounded-xl bg-slate-900 border border-slate-800">
+                    {CONF_FILTERS.map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => setConfFilter(key)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          confFilter === key
+                            ? 'bg-slate-800 text-white'
+                            : 'text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        {label}
+                        {key !== 'all' && (
+                          <span className="ml-1 text-slate-600">
+                            ({pendingList.filter((p) => {
+                              const c = p.confidence ?? 0;
+                              if (key === 'high')   return c >= 0.8;
+                              if (key === 'medium') return c >= 0.5 && c < 0.8;
+                              return c < 0.5;
+                            }).length})
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {/* Sort toggle */}
+                    <button
+                      onClick={() => setSortOrder((s) => s === 'newest' ? 'confidence' : 'newest')}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                                 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+                    >
+                      {sortOrder === 'newest'
+                        ? <><SortDesc className="w-3.5 h-3.5" /><span>Newest First</span></>
+                        : <><SortAsc className="w-3.5 h-3.5" /><span>By Confidence</span></>
+                      }
+                    </button>
+
+                    {/* Batch approve */}
+                    {highConfCount > 0 && (
+                      <button
+                        onClick={handleBatchApprove}
+                        disabled={batchLoading}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                                   bg-brand-500/10 border border-brand-500/30 text-brand-400
+                                   hover:bg-brand-500/20 transition-colors disabled:opacity-50"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>{batchLoading ? 'Approving…' : `Approve All High (${highConfCount})`}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Proposal Cards */}
+              {filteredList.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="glass-panel p-12 rounded-2xl border border-slate-800 text-center space-y-2"
                 >
                   <CheckCircle2 className="w-10 h-10 text-brand-500 mx-auto" />
-                  <h3 className="text-sm font-bold text-white">Approval Queue is Clear</h3>
+                  <h3 className="text-sm font-bold text-white">
+                    {pendingList.length === 0 ? 'Approval Queue is Clear' : 'No matches for this filter'}
+                  </h3>
                   <p className="text-xs text-slate-500">
-                    No proposals pending review. Trigger a fix from the Issue Triage tab.
+                    {pendingList.length === 0
+                      ? 'No proposals pending review. Trigger a scan to generate new proposals.'
+                      : `Try selecting a different confidence filter.`}
                   </p>
                 </motion.div>
               ) : (
                 <motion.div layout className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <AnimatePresence>
-                    {pendingList.map((proposal) => (
+                    {filteredList.map((proposal) => (
                       <motion.div
                         key={String(proposal._id)}
                         layout
@@ -219,7 +363,7 @@ export const RemediationPage = () => {
             </motion.div>
           )}
 
-          {/* ── Tab: Immutable Audit Log ──────────────────────────── */}
+          {/* ── Audit Log Tab ──────────────────────────────────────────── */}
           {activeTab === TAB_AUDIT && (
             <motion.div
               key="audit"
@@ -234,7 +378,20 @@ export const RemediationPage = () => {
                   <GitCommit className="w-4 h-4 text-brand-indigo" />
                   <span>Immutable Data Mutation Audit Trail</span>
                 </h3>
-                <span className="text-xs text-slate-500">{auditLog.length} Recorded Events</span>
+                <div className="flex items-center space-x-3">
+                  <span className="text-xs text-slate-500">{auditLog.length} Events</span>
+                  {auditLog.length > 0 && (
+                    <button
+                      onClick={() => ExportService.downloadAuditCSV(auditLog, 'grootai-audit-log')}
+                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold
+                                 bg-slate-800 border border-slate-700 text-slate-400 hover:text-white
+                                 hover:bg-slate-700 transition-colors"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Export CSV</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {auditLog.length === 0 ? (
@@ -261,6 +418,7 @@ export const RemediationPage = () => {
               )}
             </motion.div>
           )}
+
         </AnimatePresence>
       </div>
     </PageTransition>

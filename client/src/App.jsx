@@ -33,6 +33,8 @@ import { IssueReviewPage }   from './pages/IssueReviewPage.jsx';
 import { RemediationPage }   from './pages/RemediationPage.jsx';
 import { EvalSuitePage }     from './pages/EvalSuitePage.jsx';
 import { LoginPage }         from './pages/LoginPage.jsx';
+import { SettingsPage }      from './pages/SettingsPage.jsx';
+
 
 import { fetchDatasets }     from './store/datasetSlice.js';
 import { fetchPendingRemediations } from './store/remediationSlice.js';
@@ -181,6 +183,12 @@ function AppShell() {
               <EvalSuitePage />
             </ErrorBoundary>
           )}
+          {activeTab === 'settings' && (
+            <ErrorBoundary key="settings">
+              <SettingsPage />
+            </ErrorBoundary>
+          )}
+
         </AnimatePresence>
       </main>
 

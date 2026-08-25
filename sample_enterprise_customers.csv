@@ -1,0 +1,16 @@
+customerId,fullName,email,phoneNumber,companyTier,lifetimeValue,postalCode,country,status
+CUST-1001,Alexander Vance,alex.vance@blackmesa.org,+1 (555) 019-2834,Enterprise,345000,94105,USA,active
+CUST-1002,Alex Vance,alex.vance@blackmesa.org,5550192834,Enterprise,345000,94105,United States,active
+CUST-1003,Sarah Connor,sarah.connor@@cyberdyne..com,+1 (310) 555-9871,Mid-Market,89000,90210,USA,active
+CUST-1004,Elena Rostova,elena.rostova@globalfin.co.uk,+44 20 7946 0912,Enterprise,520000,EC2A 4NE,UK,active
+CUST-1005,David Smith,david_smith_at_acme.com,555-0144,SMB,15000,,USA,pending
+CUST-1006,Marcus Aurelius,marcus.a@stoicenterprises.com,+1 (415) 555-7723,Enterprise,-4500,94102,USA,active
+CUST-1007,Priya Sharma,priya.sharma@innovatetech.in,+91 98200 12345,Mid-Market,125000,400001,India,active
+CUST-1008,Dr. Gordon Freeman,gordon.f@aperturelabs.com,+1 (206) 555-0188,VIP_PLATINUM_TIER,950000,98101,USA,active
+CUST-1009,Gordon Freeman,gordon.f@aperturelabs.com,(206) 555-0188,Enterprise,950000,98101,United States,active
+CUST-1010,Chen Wei,chen.wei@shanghaitech.cn,+86 21 6234 5678,Startup,45000,200000,China,active
+CUST-1011,Rachel Green,rachel.g@ralphlauren.com,+1 (212) 555-0199,SMB,32000,10021,USA,active
+CUST-1012,Thomas Anderson,neo@matrixnet.io,555-0133,Enterprise,888888,94103,USA,active
+CUST-1013,Jessica Pearson,j.pearson@pslaw.com,+1 (212) 555-0145,Enterprise,670000,10001,USA,active
+CUST-1014,Harvey Specter,harvey.specter@pslaw.com,+1 (212) 555-0146,Enterprise,920000,,USA,active
+CUST-1015,T'Challa Udaku,tchalla@wakandadesign.org,+1 (800) 555-9000,Enterprise,1200000,90001,Wakanda,active
