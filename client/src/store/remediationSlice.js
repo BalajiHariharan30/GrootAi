@@ -108,19 +108,67 @@ export const rejectRemediation = createAsyncThunk(
   },
 );
 
+export const rollbackRemediation = createAsyncThunk(
+  'remediation/rollback',
+  async ({ remediationId, rolledBackBy, reason }, { dispatch, getState, rejectWithValue }) => {
+    try {
+      const authUser  = getState().auth?.user;
+      const actor     = authUser ? `${authUser.name} <${authUser.email}>` : (rolledBackBy ?? 'Human Data Steward');
+
+      const res = await fetch(`/api/remediation/${remediationId}/rollback`, {
+        method:      'POST',
+        headers:     { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
+        body:        JSON.stringify({ rolledBackBy: actor, reason }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      dispatch(fetchAuditLog());
+      return data;
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  },
+);
+
+export const fetchExplanation = createAsyncThunk(
+  'remediation/explain',
+  async (remediationId, { rejectWithValue }) => {
+    try {
+      const res = await fetch(`/api/remediation/${remediationId}/explain`, {
+        headers:     authHeaders(),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      return data.data;
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  },
+);
+
+
 const remediationSlice = createSlice({
   name: 'remediation',
   initialState: {
-    pendingList:       [],
-    auditLog:          [],
-    loading:           false,
-    actionInProgressId: null,
-    lastApprovedAction: null,
-    error:             null,
+    pendingList:         [],
+    auditLog:            [],
+    loading:             false,
+    actionInProgressId:  null,
+    lastApprovedAction:  null,
+    rollbackInProgressId: null,
+    explanation:         null,
+    explanationLoading:  false,
+    error:               null,
   },
   reducers: {
     clearLastApproved: (state) => {
       state.lastApprovedAction = null;
+    },
+    clearExplanation: (state) => {
+      state.explanation = null;
     },
   },
   extraReducers: (builder) => {
@@ -156,9 +204,32 @@ const remediationSlice = createSlice({
       })
       .addCase(rejectRemediation.rejected, (state) => {
         state.actionInProgressId = null;
+      })
+      // Rollback
+      .addCase(rollbackRemediation.pending, (state, action) => {
+        state.rollbackInProgressId = action.meta.arg.remediationId;
+      })
+      .addCase(rollbackRemediation.fulfilled, (state) => {
+        state.rollbackInProgressId = null;
+      })
+      .addCase(rollbackRemediation.rejected, (state) => {
+        state.rollbackInProgressId = null;
+      })
+      // Explain
+      .addCase(fetchExplanation.pending, (state) => {
+        state.explanationLoading = true;
+        state.explanation        = null;
+      })
+      .addCase(fetchExplanation.fulfilled, (state, action) => {
+        state.explanationLoading = false;
+        state.explanation        = action.payload;
+      })
+      .addCase(fetchExplanation.rejected, (state) => {
+        state.explanationLoading = false;
       });
   },
 });
 
-export const { clearLastApproved } = remediationSlice.actions;
+export const { clearLastApproved, clearExplanation } = remediationSlice.actions;
 export default remediationSlice.reducer;
+

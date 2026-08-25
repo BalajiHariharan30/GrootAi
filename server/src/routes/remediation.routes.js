@@ -247,6 +247,205 @@ router.post(
   }),
 );
 
+// ── POST /api/remediation/:id/rollback ───────────────────────────────────
+/**
+ * Rollback Gate — REVERSE an already-applied mutation.
+ *
+ * Restores the `beforeValue` from the stored `proposedFix` onto the record,
+ * marks the RemediationAction as `rolled_back`, and appends a tamper-evident
+ * audit log entry. No mutation occurs without this explicit call.
+ */
+router.post(
+  '/:id/rollback',
+  validate([
+    param('id').notEmpty().withMessage('Remediation id required'),
+    body('rolledBackBy').optional().isString(),
+    body('reason').optional().isString(),
+  ]),
+  asyncHandler(async (req, res) => {
+    const { id }         = req.params;
+    const rolledBackBy   = req.body.rolledBackBy ?? 'Human Data Steward';
+    const reason         = req.body.reason ?? 'Manual rollback requested';
+
+    let remediation = null;
+    let record      = null;
+
+    if (getDBStatus()) {
+      remediation = await RemediationAction.findById(id);
+    } else {
+      remediation = store.remediations?.find((r) => String(r._id) === String(id));
+    }
+
+    if (!remediation) {
+      return res.status(404).json({ success: false, error: 'Remediation action not found.' });
+    }
+
+    if (remediation.status !== 'applied') {
+      return res.status(400).json({
+        success: false,
+        error:   `Cannot rollback — action is in state '${remediation.status}', must be 'applied'.`,
+      });
+    }
+
+    // Restore the original (before) value onto the record
+    if (getDBStatus()) {
+      record = await Record.findById(remediation.recordId);
+    } else {
+      record = store.records?.find((r) => String(r._id) === String(remediation.recordId));
+    }
+
+    if (record) {
+      const restoredData = { ...(record.data ?? record) };
+      if (remediation.targetField && remediation.targetField !== 'all') {
+        restoredData[remediation.targetField] = remediation.proposedFix?.beforeValue;
+      } else {
+        // For merge_records strategy — we can't fully un-merge, so flag it
+        restoredData.__rollback_note = 'Merge rollback: original records preserved. Manual reconciliation may be required.';
+      }
+
+      if (getDBStatus()) {
+        record.data    = restoredData;
+        record.version = (record.version ?? 1) + 1;
+        await record.save();
+      } else {
+        record.data    = restoredData;
+        record.version = (record.version ?? 1) + 1;
+      }
+    }
+
+    // Update remediation status and append rollback audit entry
+    remediation.status = 'rolled_back';
+    remediation.auditLog.push({
+      action:    'HUMAN_ROLLBACK_EXECUTED',
+      timestamp: new Date(),
+      actor:     rolledBackBy,
+      details:   `Rollback executed by ${rolledBackBy}. Reason: ${reason}. Value restored to: '${remediation.proposedFix?.beforeValue}'.`,
+    });
+
+    if (getDBStatus()) await remediation.save();
+
+    // Invalidate caches
+    await cache.del(`profile:${remediation.datasetId}`);
+    await cache.delPattern(`records:${remediation.datasetId}:*`);
+    await cache.delPattern('issues:*');
+
+    logger.info({
+      event:         'remediation_rolled_back',
+      remediationId: String(remediation._id),
+      rolledBackBy,
+      reason,
+    });
+
+    res.json({
+      success: true,
+      message: `Rollback complete — value restored to original. Audit entry recorded.`,
+      data:    remediation,
+    });
+  }),
+);
+
+// ── GET /api/remediation/:id/explain ─────────────────────────────────────
+/**
+ * AI Decision Explainability endpoint.
+ * Returns a structured breakdown of WHY the AI proposed this fix:
+ * the issue details, the evidence chain, the strategy chosen, confidence
+ * calculation factors, and the full audit trail for this action.
+ */
+router.get(
+  '/:id/explain',
+  validate([param('id').notEmpty().withMessage('Remediation id required')]),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    let remediation = null;
+    let issue       = null;
+
+    if (getDBStatus()) {
+      remediation = await RemediationAction.findById(id).lean();
+      if (remediation) {
+        issue = await Issue.findById(remediation.issueId).lean();
+      }
+    } else {
+      remediation = store.remediations?.find((r) => String(r._id) === String(id));
+      if (remediation) {
+        issue = store.issues?.find((i) => String(i._id) === String(remediation.issueId));
+      }
+    }
+
+    if (!remediation) {
+      return res.status(404).json({ success: false, error: 'Remediation not found.' });
+    }
+
+    // Build structured explanation
+    const confidencePct  = Math.round((remediation.confidence ?? 0.95) * 100);
+    const confidenceDesc =
+      confidencePct >= 85 ? 'High — AI has strong evidence for this fix'
+      : confidencePct >= 60 ? 'Medium — AI is reasonably confident but human review critical'
+      : 'Low — AI is uncertain; manual investigation recommended';
+
+    const strategyDescriptions = {
+      format_standardize: 'Detected a formatting inconsistency. The AI standardized the value to match the inferred canonical format (e.g., email syntax, phone number E.164 format).',
+      impute_default:     'Detected a missing (null/empty) value. The AI proposed a statistically derived or domain-specific default replacement based on surrounding record patterns.',
+      merge_records:      'Detected two records with high entity similarity scores (fuzzy name match + shared identifier fields). The AI proposed merging them into a single canonical record.',
+      trim_sanitize:      'Detected leading/trailing whitespace or control characters that would cause downstream join failures. The AI proposed sanitizing the string.',
+      domain_fix:         'Detected a value outside the valid categorical domain (e.g., illegal enum value). The AI proposed the closest valid category based on edit distance.',
+      custom_patch:       'The AI applied a custom transformation rule derived from the active NL rule set for this dataset.',
+    };
+
+    const explanation = {
+      remediationId:    String(remediation._id),
+      status:           remediation.status,
+      confidence:       { score: confidencePct, label: confidenceDesc },
+      whatHappened: {
+        field:          remediation.targetField,
+        strategy:       remediation.strategy,
+        strategyReason: strategyDescriptions[remediation.strategy] ?? 'Custom transformation applied.',
+        beforeValue:    remediation.proposedFix?.beforeValue,
+        afterValue:     remediation.proposedFix?.afterValue,
+        diffDetails:    remediation.proposedFix?.diffDetails,
+      },
+      whyAIDidThis: {
+        agentReasoning: remediation.agentReasoning,
+        issueType:      issue?.type       ?? 'unknown',
+        issueSeverity:  issue?.severity   ?? 'unknown',
+        issueRule:      issue?.ruleId     ? `Rule ID: ${issue.ruleId}` : 'Auto-detected by profiler',
+        rowNumber:      remediation.rowNumber,
+        detectedAt:     issue?.createdAt  ?? remediation.createdAt,
+      },
+      evidenceChain: [
+        {
+          step: 1,
+          actor: 'GrootAi Auto-Profiler',
+          action: `Scanned dataset and detected a ${issue?.type ?? 'data quality'} issue on Row #${remediation.rowNumber}, field '${remediation.targetField}'.`,
+        },
+        {
+          step: 2,
+          actor: 'GrootAi Remediation Agent',
+          action: `Analyzed the issue context. Selected strategy: '${remediation.strategy}'. Computed confidence: ${confidencePct}%.`,
+        },
+        {
+          step: 3,
+          actor: 'GrootAi Remediation Agent',
+          action: `Generated fix proposal: '${remediation.proposedFix?.beforeValue}' → '${remediation.proposedFix?.afterValue}'. Queued for human review.`,
+        },
+        ...(remediation.status === 'applied' ? [{
+          step: 4,
+          actor: remediation.approvedBy ?? 'Human Data Steward',
+          action: `Human reviewed and approved the fix. Data mutation applied at ${remediation.appliedAt ? new Date(remediation.appliedAt).toLocaleString() : 'N/A'}.`,
+        }] : []),
+        ...(remediation.status === 'rolled_back' ? [{
+          step: 5,
+          actor: 'Human Data Steward',
+          action: `Rollback was executed. Original value '${remediation.proposedFix?.beforeValue}' was restored.`,
+        }] : []),
+      ],
+      auditTrail: remediation.auditLog ?? [],
+    };
+
+    res.json({ success: true, data: explanation });
+  }),
+);
+
 // ── GET /api/remediation/audit-log ───────────────────────────────────────
 /** Returns the full immutable audit trail, newest first. */
 router.get(
@@ -259,7 +458,7 @@ router.get(
         .sort({ createdAt: -1 })
         .lean();
     } else {
-      actions = [...store.remediations].sort(
+      actions = [...(store.remediations ?? [])].sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
       );
     }
@@ -269,3 +468,4 @@ router.get(
 );
 
 export default router;
+

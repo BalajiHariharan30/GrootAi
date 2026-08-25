@@ -14,19 +14,24 @@ import toast                                                       from 'react-h
 import PropTypes                                                   from 'prop-types';
 import {
   UserCheck, History, CheckCircle2, GitCommit, Download,
-  SortAsc, SortDesc, Zap, ShieldCheck,
+  SortAsc, SortDesc, Zap, ShieldCheck, Brain, RotateCcw,
 } from 'lucide-react';
+
 
 import {
   fetchPendingRemediations,
   fetchAuditLog,
   approveRemediation,
   rejectRemediation,
+  rollbackRemediation,
+  fetchExplanation,
 }                                    from '../store/remediationSlice.js';
 import { RemediationProposalCard }   from '../components/RemediationProposalCard.jsx';
+import { AIExplainModal }            from '../components/AIExplainModal.jsx';
 import { StatusBadge }               from '../components/StatusBadge.jsx';
 import { PageTransition }            from '../components/PageTransition.jsx';
 import { ExportService }             from '../services/ExportService.js';
+
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,9 +47,9 @@ const CONF_FILTERS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Audit Row
+// Audit Row — with "Why AI did this" and Rollback action buttons
 // ---------------------------------------------------------------------------
-const AuditRow = memo(({ item, idx }) => (
+const AuditRow = memo(({ item, idx, onExplain, onRollback, rollbackInProgressId }) => (
   <motion.tr
     key={String(item._id ?? idx)}
     initial={{ opacity: 0, x: -8 }}
@@ -52,26 +57,74 @@ const AuditRow = memo(({ item, idx }) => (
     transition={{ delay: idx * 0.03, duration: 0.25 }}
     className="hover:bg-slate-800/40 transition-colors"
   >
-    <td className="p-3.5 font-mono text-slate-400 text-[11px]">
+    <td className="p-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
       {new Date(item.appliedAt ?? item.createdAt).toLocaleString()}
     </td>
-    <td className="p-3.5 text-white font-bold text-xs">{item.approvedBy ?? 'System'}</td>
-    <td className="p-3.5 font-mono text-brand-cyan text-xs">Row #{item.rowNumber}</td>
-    <td className="p-3.5 font-mono text-slate-300 text-xs">{item.targetField}</td>
-    <td className="p-3.5">
+    <td className="p-3 text-white font-bold text-xs">{item.approvedBy ?? 'System'}</td>
+    <td className="p-3 font-mono text-brand-cyan text-xs">Row #{item.rowNumber}</td>
+    <td className="p-3 font-mono text-slate-300 text-xs">{item.targetField}</td>
+    <td className="p-3">
       <StatusBadge
         label={item.status}
-        variant={item.status === 'applied' ? 'applied' : 'rejected'}
+        variant={
+          item.status === 'applied'      ? 'applied'  :
+          item.status === 'rolled_back'  ? 'rejected' :
+          'rejected'
+        }
         size="sm"
       />
     </td>
-    <td className="p-3.5 text-slate-400 text-[11px] max-w-sm truncate">
-      {item.proposedFix?.diffDetails ?? item.agentReasoning}
+    <td className="p-3">
+      {/* Before → After diff inline */}
+      {item.proposedFix?.beforeValue !== undefined && (
+        <span className="text-[10px] font-mono">
+          <span className="text-rose-400">{String(item.proposedFix.beforeValue).slice(0, 20)}</span>
+          <span className="text-slate-500 mx-1">→</span>
+          <span className="text-brand-400">{String(item.proposedFix.afterValue ?? '').slice(0, 20)}</span>
+        </span>
+      )}
+    </td>
+    <td className="p-3">
+      <div className="flex items-center space-x-1.5">
+        {/* Why AI did this */}
+        <button
+          onClick={() => onExplain(String(item._id))}
+          className="flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] font-bold
+                     bg-brand-indigo/10 border border-brand-indigo/20 text-brand-indigo
+                     hover:bg-brand-indigo/20 transition-colors whitespace-nowrap"
+          title="View AI explainability"
+        >
+          <Brain className="w-3 h-3" />
+          <span>Why AI?</span>
+        </button>
+
+        {/* Rollback — only for applied */}
+        {item.status === 'applied' && (
+          <button
+            onClick={() => onRollback(String(item._id))}
+            disabled={rollbackInProgressId === String(item._id)}
+            className="flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] font-bold
+                       bg-rose-500/10 border border-rose-500/20 text-rose-400
+                       hover:bg-rose-500/20 transition-colors disabled:opacity-50 whitespace-nowrap"
+            title="Rollback this change"
+          >
+            <RotateCcw className={`w-3 h-3 ${rollbackInProgressId === String(item._id) ? 'animate-spin' : ''}`} />
+            <span>Rollback</span>
+          </button>
+        )}
+      </div>
     </td>
   </motion.tr>
 ));
+
 AuditRow.displayName = 'AuditRow';
-AuditRow.propTypes   = { item: PropTypes.object.isRequired, idx: PropTypes.number.isRequired };
+AuditRow.propTypes   = {
+  item:                  PropTypes.object.isRequired,
+  idx:                   PropTypes.number.isRequired,
+  onExplain:             PropTypes.func.isRequired,
+  onRollback:            PropTypes.func.isRequired,
+  rollbackInProgressId:  PropTypes.string,
+};
 
 // ---------------------------------------------------------------------------
 // Summary Stats Bar
@@ -109,8 +162,9 @@ function SummaryBar({ proposals }) {
 export const RemediationPage = () => {
   const dispatch = useDispatch();
 
-  const { pendingList, auditLog, actionInProgressId } = useSelector((s) => s.remediation);
+  const { pendingList, auditLog, actionInProgressId, rollbackInProgressId } = useSelector((s) => s.remediation);
   const { user, isGuestMode } = useSelector((s) => s.auth);
+
 
   const [activeTab,    setActiveTab]    = useState(TAB_PENDING);
   const [confFilter,   setConfFilter]   = useState('all');
@@ -150,6 +204,32 @@ export const RemediationPage = () => {
       });
     },
     [dispatch],
+  );
+
+  // ── Explain (AI Why) ──────────────────────────────────────────────────────
+  const handleExplain = useCallback(
+    (remediationId) => {
+      dispatch(fetchExplanation(remediationId));
+    },
+    [dispatch],
+  );
+
+  // ── Rollback ──────────────────────────────────────────────────────────────
+  const handleRollback = useCallback(
+    (remediationId) => {
+      const actor   = user?.name ?? 'Human Data Steward';
+      const promise = dispatch(rollbackRemediation({
+        remediationId,
+        rolledBackBy: actor,
+        reason: 'Manual rollback from Audit Trail.',
+      })).unwrap();
+      toast.promise(promise, {
+        loading: 'Restoring original value and logging rollback…',
+        success: '↩️ Rollback complete — original data restored.',
+        error:   (err) => `Rollback failed: ${err}`,
+      });
+    },
+    [dispatch, user],
   );
 
   // ── Batch Approve All High-Confidence ───────────────────────────────────
@@ -403,17 +483,25 @@ export const RemediationPage = () => {
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider z-10">
                       <tr>
-                        {['Timestamp', 'Actor', 'Record', 'Target Field', 'Status', 'Audit Note'].map((h) => (
-                          <th key={h} className="p-3.5 whitespace-nowrap">{h}</th>
+                        {['Timestamp', 'Actor', 'Record', 'Field', 'Status', 'Before → After', 'Actions'].map((h) => (
+                          <th key={h} className="p-3 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 bg-dark-900/40 font-medium">
                       {auditLog.map((item, idx) => (
-                        <AuditRow key={String(item._id ?? idx)} item={item} idx={idx} />
+                        <AuditRow
+                          key={String(item._id ?? idx)}
+                          item={item}
+                          idx={idx}
+                          onExplain={handleExplain}
+                          onRollback={handleRollback}
+                          rollbackInProgressId={rollbackInProgressId}
+                        />
                       ))}
                     </tbody>
                   </table>
+
                 </div>
               )}
             </motion.div>
@@ -421,6 +509,11 @@ export const RemediationPage = () => {
 
         </AnimatePresence>
       </div>
+
+      {/* AI Explainability Modal — global, rendered at page root */}
+      <AIExplainModal />
+
     </PageTransition>
   );
 };
+
