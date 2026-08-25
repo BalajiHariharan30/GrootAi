@@ -63,8 +63,13 @@ function QualitySparkline({ history }) {
 }
 
 // ── Dataset Card ─────────────────────────────────────────────────────────
+const SOURCE_ICONS = { csv: '📄', demo: '🏢', api: '🔌', db: '🗄️', json: '📋' };
+
 const DatasetCard = React.memo(({ dataset, isSelected, onSelect, onScan, scanning }) => {
-  const history = dataset.profile?.history ?? [];
+  const history  = dataset.profile?.history ?? [];
+  const srcIcon  = SOURCE_ICONS[dataset.sourceType] ?? '📦';
+  const fileName = dataset.name;
+
   return (
     <motion.div
       layout
@@ -77,20 +82,38 @@ const DatasetCard = React.memo(({ dataset, isSelected, onSelect, onScan, scannin
           : 'border-slate-800 hover:border-slate-700'
       }`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center space-x-2 truncate">
-          <span className="w-2.5 h-2.5 rounded-full bg-brand-500 animate-pulse shrink-0" />
-          <h3 className="font-bold text-sm text-white truncate group-hover:text-brand-400 transition-colors">
-            {dataset.name}
-          </h3>
+      {/* ── Header: source icon + name + source type badge ───── */}
+      <div className="flex items-start justify-between mb-1">
+        <div className="flex items-center space-x-2 truncate min-w-0">
+          <span className="text-xl shrink-0" title={`Source: ${dataset.sourceType}`}>{srcIcon}</span>
+          <div className="min-w-0">
+            <h3 className="font-extrabold text-sm text-white truncate group-hover:text-brand-400 transition-colors leading-tight">
+              {fileName}
+            </h3>
+            {/* File / org identifier row */}
+            <div className="flex items-center space-x-2 mt-0.5">
+              <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                {dataset.sourceType === 'csv' ? '📎 Uploaded CSV' : dataset.sourceType === 'demo' ? '🏢 Demo Dataset' : dataset.sourceType}
+              </span>
+              {dataset.sourceType === 'csv' && (
+                <span className="text-[10px] text-brand-cyan font-mono truncate">
+                  {dataset.description?.includes('CSV') ? `${dataset.rowCount} rows` : ''}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase shrink-0 ml-2">
-          {dataset.sourceType}
+        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase shrink-0 ml-2 ${
+          dataset.qualityScore >= 90 ? 'bg-brand-500/10 text-brand-400 border-brand-500/20'
+          : dataset.qualityScore >= 75 ? 'bg-brand-amber/10 text-brand-amber border-brand-amber/20'
+          : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+        }`}>
+          {dataset.qualityScore || 100}%
         </span>
       </div>
 
-      <p className="text-xs text-slate-400 line-clamp-2 mb-3 leading-relaxed">
+      {/* ── Description (org / data context) ─────────────────── */}
+      <p className="text-[11px] text-slate-400 line-clamp-2 mb-3 mt-2 leading-relaxed">
         {dataset.description || 'Enterprise tabular data source'}
       </p>
 
@@ -103,31 +126,29 @@ const DatasetCard = React.memo(({ dataset, isSelected, onSelect, onScan, scannin
 
       {/* Footer row */}
       <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs">
-        <div className="text-slate-400">
-          <span className="font-bold text-white font-mono">{dataset.rowCount || 0}</span> rows
+        <div className="text-slate-400 space-x-3 flex items-center">
+          <span><span className="font-bold text-white font-mono">{dataset.rowCount || 0}</span> rows</span>
+          {dataset.profile?.columns?.length > 0 && (
+            <span><span className="font-bold text-slate-300 font-mono">{dataset.profile.columns.length}</span> cols</span>
+          )}
         </div>
-        <div className="flex items-center space-x-3">
-          <span className={`font-mono font-bold ${dataset.qualityScore >= 80 ? 'text-brand-400' : 'text-brand-amber'}`}>
-            {dataset.qualityScore || 100}%
-          </span>
-          {/* Scan button on card */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onScan(dataset._id); }}
-            disabled={scanning}
-            title="Run DQ Scan"
-            className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-brand-500/10
-                       text-brand-400 border border-brand-500/20 hover:bg-brand-500/20
-                       transition-colors disabled:opacity-40 text-[10px] font-bold"
-          >
-            <Play className="w-3 h-3" />
-            <span>{scanning ? 'Scanning…' : 'Scan'}</span>
-          </button>
-        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onScan(dataset._id); }}
+          disabled={scanning}
+          title="Run DQ Scan"
+          className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-brand-500/10
+                     text-brand-400 border border-brand-500/20 hover:bg-brand-500/20
+                     transition-colors disabled:opacity-40 text-[10px] font-bold"
+        >
+          <Play className="w-3 h-3" />
+          <span>{scanning ? 'Scanning…' : 'Run Scan'}</span>
+        </button>
       </div>
     </motion.div>
   );
 });
 DatasetCard.displayName = 'DatasetCard';
+
 
 // ── Page ─────────────────────────────────────────────────────────────────
 export const DashboardPage = ({ onOpenUpload, onNavigate }) => {

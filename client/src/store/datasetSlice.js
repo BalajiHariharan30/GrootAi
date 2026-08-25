@@ -84,7 +84,22 @@ export const fetchLatestEval = createAsyncThunk(
         credentials: 'include',
       });
       const data = await res.json();
-      return data.data ?? {};
+      const raw  = data.data ?? {};
+
+      // Normalise server field names → what EvalSuitePage expects
+      return {
+        accuracy:         typeof raw.accuracyPercent === 'number' ? raw.accuracyPercent / 100 : raw.accuracy,
+        operatorAccuracy: typeof raw.operatorAccuracyPercent === 'number' ? raw.operatorAccuracyPercent / 100 : raw.operatorAccuracy,
+        f1Score:          raw.detectionQuality?.f1Score     ?? raw.f1Score,
+        latencyP50:       raw.latency?.p50Ms                ?? raw.latencyP50,
+        latencyP95:       raw.latency?.p95Ms                ?? raw.latencyP95,
+        caseResults:      raw.detailedResults               ?? raw.caseResults ?? [],
+        passedCases:      (raw.detailedResults ?? raw.caseResults ?? []).filter((c) => c.passed).length,
+        totalCases:       raw.benchmarkCasesCount           ?? (raw.detailedResults?.length ?? 0),
+        detectionQuality: raw.detectionQuality,
+        cacheEfficiency:  raw.cacheEfficiency,
+        timestamp:        raw.timestamp,
+      };
     } catch (err) {
       return rejectWithValue(err.message);
     }
@@ -101,8 +116,23 @@ export const runEvalSuite = createAsyncThunk(
         credentials: 'include',
       });
       const data = await res.json();
-      return data.data ?? {};
+      const raw  = data.data ?? {};
+
+      return {
+        accuracy:         typeof raw.accuracyPercent === 'number' ? raw.accuracyPercent / 100 : raw.accuracy,
+        operatorAccuracy: typeof raw.operatorAccuracyPercent === 'number' ? raw.operatorAccuracyPercent / 100 : raw.operatorAccuracy,
+        f1Score:          raw.detectionQuality?.f1Score     ?? raw.f1Score,
+        latencyP50:       raw.latency?.p50Ms                ?? raw.latencyP50,
+        latencyP95:       raw.latency?.p95Ms                ?? raw.latencyP95,
+        caseResults:      raw.detailedResults               ?? raw.caseResults ?? [],
+        passedCases:      (raw.detailedResults ?? raw.caseResults ?? []).filter((c) => c.passed).length,
+        totalCases:       raw.benchmarkCasesCount           ?? (raw.detailedResults?.length ?? 0),
+        detectionQuality: raw.detectionQuality,
+        cacheEfficiency:  raw.cacheEfficiency,
+        timestamp:        raw.timestamp,
+      };
     } catch (err) {
+
       return rejectWithValue(err.message);
     }
   },
