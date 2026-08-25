@@ -13,9 +13,10 @@
  *  - getCalibrationMap() returns { [issueType]: { [strategy]: rate } }
  */
 import { FeedbackLog } from '../models/FeedbackLog.js';
-import { getDBStatus } from '../config/db.js';
-import { store }       from '../inMemoryStore.js';
-import { logger }      from '../utils/logger.js';
+import { getDBStatus }  from '../config/db.js';
+import { store }        from '../data/inMemoryStore.js';
+import logger           from '../config/logger.js';
+
 
 // ── In-Memory Fallback Store ───────────────────────────────────────────────
 if (!store.feedbackLog) store.feedbackLog = [];
