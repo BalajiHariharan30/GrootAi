@@ -17,12 +17,14 @@ import { Readable }          from 'stream';
 import { Dataset }           from '../models/Dataset.js';
 import { Record }            from '../models/Record.js';
 import { Rule }              from '../models/Rule.js';
-import { Issue }             from '../models/Issue.js';
-import { store }             from '../data/inMemoryStore.js';
-import { getDBStatus }       from '../config/db.js';
-import { ProfilerService }   from '../services/profiler.service.js';
-import { RuleEngineService } from '../services/ruleEngine.service.js';
-import { MatcherService }    from '../services/matcher.service.js';
+import { Issue }                     from '../models/Issue.js';
+import { RemediationAction }         from '../models/RemediationAction.js';
+import { store }                     from '../data/inMemoryStore.js';
+import { getDBStatus }               from '../config/db.js';
+import { ProfilerService }           from '../services/profiler.service.js';
+import { RuleEngineService }         from '../services/ruleEngine.service.js';
+import { MatcherService }            from '../services/matcher.service.js';
+import { RemediationService }        from '../services/remediation.service.js';
 import { cache }             from '../cache/redisClient.js';
 import { asyncHandler }      from '../middleware/asyncHandler.js';
 import logger                from '../config/logger.js';
@@ -233,7 +235,18 @@ router.post(
 
     if (getDBStatus()) {
       await Issue.deleteMany({ datasetId: id, status: { $in: ['open', 'in_review'] } });
-      if (combinedIssues.length > 0) await Issue.insertMany(combinedIssues);
+      if (combinedIssues.length > 0) {
+        const insertedIssues = await Issue.insertMany(combinedIssues);
+        // Pre-generate remediation proposals so HITL queue has actionable proposals ready
+        for (const iss of insertedIssues.slice(0, 10)) {
+          const rec = records.find((r) => String(r._id) === String(iss.recordId));
+          const proposal = await RemediationService.proposeFix(
+            iss,
+            rec ?? { data: { [iss.field]: iss.currentValue } },
+          );
+          await RemediationAction.create(proposal);
+        }
+      }
       dataset.qualityScore = newProfile.qualityScore;
       dataset.dimensions   = newProfile.dimensions;
       dataset.profile      = newProfileData;
@@ -242,11 +255,21 @@ router.post(
       store.issues = store.issues.filter(
         (i) => String(i.datasetId) !== String(id) || !['open', 'in_review'].includes(i.status),
       );
-      combinedIssues.forEach((iss) => {
+      for (const iss of combinedIssues) {
         iss._id       = store.generateId();
         iss.createdAt = new Date();
         store.issues.push(iss);
-      });
+      }
+      for (const iss of combinedIssues.slice(0, 10)) {
+        const rec = records.find((r) => String(r._id) === String(iss.recordId));
+        const proposal = await RemediationService.proposeFix(
+          iss,
+          rec ?? { data: { [iss.field]: iss.currentValue } },
+        );
+        proposal._id = store.generateId();
+        if (!store.remediations) store.remediations = [];
+        store.remediations.push(proposal);
+      }
       dataset.qualityScore = newProfile.qualityScore;
       dataset.dimensions   = newProfile.dimensions;
       dataset.profile      = newProfileData;

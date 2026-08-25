@@ -87,7 +87,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/datasets',    requireAuth({ allowGuest: true }), datasetRoutes);
 app.use('/api/rules',       requireAuth({ allowGuest: true }), ruleRoutes);
 app.use('/api/issues',      requireAuth({ allowGuest: true }), issueRoutes);
-app.use('/api/remediation', requireAuth(),                     remediationRoutes);
+app.use('/api/remediation', requireAuth({ allowGuest: true }), remediationRoutes);
 app.use('/api/eval',        requireAuth({ allowGuest: true }), evalRoutes);
 
 // ── Model Context Protocol (public — API-key auth handled externally) ─────
