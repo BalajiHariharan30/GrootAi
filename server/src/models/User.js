@@ -1,6 +1,7 @@
 /**
  * @module User
- * @description Mongoose schema (with in-memory fallback) for Google OAuth users.
+ * @description Mongoose schema (with in-memory fallback) for GrootAi users
+ * supporting both Email/Password authentication and Google OAuth 2.0.
  *
  * Role hierarchy:
  *   viewer  → read-only: can see datasets, profiles, issues
@@ -11,25 +12,32 @@ import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
   {
-    /** Google OAuth subject identifier — unique per Google account */
+    /** Google OAuth subject identifier (optional for email/password users) */
     googleId: {
       type:     String,
-      required: true,
-      unique:   true,
+      sparse:   true,
       index:    true,
+      default:  null,
     },
     email: {
       type:      String,
       required:  true,
+      unique:    true,
       lowercase: true,
       trim:      true,
+      index:     true,
+    },
+    /** Hashed password (for email/password users) */
+    password: {
+      type:      String,
+      default:   null,
     },
     name: {
       type:     String,
       required: true,
       trim:     true,
     },
-    /** Google profile photo URL */
+    /** Profile photo URL */
     avatar: {
       type:    String,
       default: null,
@@ -56,4 +64,4 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-export const User = mongoose.model('User', userSchema);
+export const User = mongoose.models.User || mongoose.model('User', userSchema);

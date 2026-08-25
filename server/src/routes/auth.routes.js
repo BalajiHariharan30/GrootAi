@@ -1,31 +1,25 @@
 /**
  * @module auth.routes
- * @description Google OAuth 2.0 authentication routes.
+ * @description Authentication router supporting both Email/Password authentication
+ * and Google OAuth 2.0.
  *
- * Flow:
- *  1. `GET /api/auth/google`
- *       → Redirects browser to Google consent screen
- *
- *  2. `GET /api/auth/google/callback`
- *       → Google redirects back here with `?code=`
- *       → Passport verifies, upserts User, issues a signed JWT
- *       → Redirects to frontend with token as a secure httpOnly cookie
- *         AND as a URL param for SPA environments that can't read cookies
- *
- *  3. `GET /api/auth/me`
- *       → Returns current user from JWT (used on app boot to hydrate Redux)
- *
- *  4. `POST /api/auth/logout`
- *       → Clears the httpOnly cookie
- *
- * Security notes:
- *  • JWT is RS256-signed with `JWT_SECRET` (at least 32 chars in prod)
- *  • Cookie is `httpOnly`, `sameSite: lax`, `secure` in production
- *  • Token expiry defaults to 7 days (configurable via JWT_EXPIRES_IN)
+ * Endpoints:
+ *  1. `POST /api/auth/register` → Register with Email & Password
+ *  2. `POST /api/auth/login`    → Sign in with Email & Password
+ *  3. `GET  /api/auth/google`   → Google OAuth initiation
+ *  4. `GET  /api/auth/google/callback` → Google OAuth callback
+ *  5. `GET  /api/auth/me`       → Get current authenticated user
+ *  6. `POST /api/auth/logout`   → Clear session token/cookie
  */
 import express          from 'express';
 import jwt              from 'jsonwebtoken';
+import bcrypt           from 'bcryptjs';
+import { body }         from 'express-validator';
 import passportInstance from '../config/passport.js';
+import { User }         from '../models/User.js';
+import { store }        from '../data/inMemoryStore.js';
+import { getDBStatus }  from '../config/db.js';
+import { validate }     from '../middleware/validate.js';
 import { requireAuth }  from '../middleware/requireAuth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import logger           from '../config/logger.js';
@@ -39,11 +33,11 @@ const FRONTEND_URL   = process.env.FRONTEND_URL   ?? 'http://localhost:5173';
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ---------------------------------------------------------------------------
-// Helper: sign a JWT for a User document
+// Helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Generates a signed JWT containing the minimal user payload.
+ * Generates a signed JWT containing the user payload.
  * @param {object} user
  * @returns {string}
  */
@@ -76,28 +70,199 @@ function setAuthCookie(res, token) {
   });
 }
 
+// ── POST /api/auth/register ────────────────────────────────────────────────
+/**
+ * Registers a new user with Name, Email, and Password.
+ */
+router.post(
+  '/register',
+  validate([
+    body('name')
+      .trim()
+      .isLength({ min: 2 })
+      .withMessage('Name must be at least 2 characters.'),
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email address.'),
+    body('password')
+      .isLength({ min: 6 })
+      .withMessage('Password must be at least 6 characters long.'),
+  ]),
+  asyncHandler(async (req, res) => {
+    const { name, email, password } = req.body;
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Check if user already exists
+    let existingUser = null;
+    if (getDBStatus()) {
+      existingUser = await User.findOne({ email: cleanEmail });
+    } else {
+      existingUser = (store.users || []).find((u) => u.email === cleanEmail);
+    }
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error:   'An account with this email already exists. Please sign in instead.',
+      });
+    }
+
+    // Hash password
+    const salt           = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    let newUser = null;
+    if (getDBStatus()) {
+      newUser = await User.create({
+        name:        name.trim(),
+        email:       cleanEmail,
+        password:    hashedPassword,
+        role:        'steward',
+        lastLoginAt: new Date(),
+      });
+    } else {
+      newUser = {
+        _id:         store.generateId(),
+        name:        name.trim(),
+        email:       cleanEmail,
+        password:    hashedPassword,
+        role:        'steward',
+        avatar:      null,
+        lastLoginAt: new Date(),
+        createdAt:   new Date(),
+      };
+      if (!store.users) store.users = [];
+      store.users.push(newUser);
+    }
+
+    const token = signToken(newUser);
+    setAuthCookie(res, token);
+
+    logger.info({
+      event:  'email_register',
+      userId: String(newUser._id),
+      email:  newUser.email,
+      name:   newUser.name,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Account created successfully.',
+      token,
+      data: {
+        id:     String(newUser._id),
+        name:   newUser.name,
+        email:  newUser.email,
+        avatar: newUser.avatar ?? null,
+        role:   newUser.role,
+      },
+    });
+  }),
+);
+
+// ── POST /api/auth/login ───────────────────────────────────────────────────
+/**
+ * Authenticates an existing user with Email and Password.
+ */
+router.post(
+  '/login',
+  validate([
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Please provide a valid email address.'),
+    body('password')
+      .notEmpty()
+      .withMessage('Password is required.'),
+  ]),
+  asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
+    const cleanEmail = email.toLowerCase().trim();
+
+    let user = null;
+    if (getDBStatus()) {
+      user = await User.findOne({ email: cleanEmail });
+    } else {
+      user = (store.users || []).find((u) => u.email === cleanEmail);
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error:   'Invalid email or password. Please check your credentials.',
+      });
+    }
+
+    // Check password
+    if (!user.password) {
+      return res.status(401).json({
+        success: false,
+        error:   'This account was created via Google Sign-In. Please click "Sign in with Google".',
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error:   'Invalid email or password. Please check your credentials.',
+      });
+    }
+
+    // Update lastLoginAt
+    user.lastLoginAt = new Date();
+    if (getDBStatus()) {
+      await user.save();
+    }
+
+    const token = signToken(user);
+    setAuthCookie(res, token);
+
+    logger.info({
+      event:  'email_login',
+      userId: String(user._id),
+      email:  user.email,
+      name:   user.name,
+    });
+
+    res.json({
+      success: true,
+      message: 'Signed in successfully.',
+      token,
+      data: {
+        id:     String(user._id),
+        name:   user.name,
+        email:  user.email,
+        avatar: user.avatar ?? null,
+        role:   user.role,
+      },
+    });
+  }),
+);
+
 // ── GET /api/auth/google ────────────────────────────────────────────────────
 /**
  * Initiates the Google OAuth flow.
- * Redirects the browser to Google's consent screen requesting
- * profile and email scopes.
  */
 router.get(
   '/google',
   passportInstance.authenticate('google', {
     scope:  ['profile', 'email'],
-    prompt: 'select_account', // Always show account picker
+    prompt: 'select_account',
   }),
 );
 
 // ── GET /api/auth/google/callback ───────────────────────────────────────────
 /**
  * OAuth callback — Google redirects here after user grants permission.
- * Issues a JWT, sets it as a cookie, and redirects to the React frontend.
  */
 router.get(
   '/google/callback',
-  passportInstance.authenticate('google', { session: false, failureRedirect: `${FRONTEND_URL}/?error=oauth_failed` }),
+  passportInstance.authenticate('google', {
+    session:         false,
+    failureRedirect: `${FRONTEND_URL}/?error=oauth_failed`,
+  }),
   asyncHandler(async (req, res) => {
     const user  = req.user;
     const token = signToken(user);
@@ -105,13 +270,12 @@ router.get(
     setAuthCookie(res, token);
 
     logger.info({
-      event:  'auth_success',
+      event:  'oauth_success',
       userId: String(user._id),
       email:  user.email,
       role:   user.role,
     });
 
-    // Redirect to frontend — token also passed as URL param for SPA hydration
     res.redirect(`${FRONTEND_URL}/?token=${encodeURIComponent(token)}`);
   }),
 );
@@ -119,7 +283,6 @@ router.get(
 // ── GET /api/auth/me ────────────────────────────────────────────────────────
 /**
  * Returns the current authenticated user from the JWT.
- * Used by the React app on boot to rehydrate auth state without a full OAuth flow.
  */
 router.get(
   '/me',
@@ -127,7 +290,7 @@ router.get(
   asyncHandler(async (req, res) => {
     res.json({
       success: true,
-      data:    {
+      data: {
         id:     req.user.sub,
         email:  req.user.email,
         name:   req.user.name,
@@ -145,12 +308,11 @@ router.get(
 router.post(
   '/logout',
   asyncHandler(async (req, res) => {
-    // Best-effort: log if we have a user
     if (req.cookies?.grootai_token) {
       try {
         const decoded = jwt.verify(req.cookies.grootai_token, JWT_SECRET);
         logger.info({ event: 'auth_logout', email: decoded.email });
-      } catch (_) { /* token may already be expired */ }
+      } catch (_) { /* ignore */ }
     }
 
     res.clearCookie('grootai_token', { path: '/' });

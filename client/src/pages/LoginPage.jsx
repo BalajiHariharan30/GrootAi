@@ -1,24 +1,31 @@
 /**
  * @module LoginPage
- * @description Full-screen premium Google OAuth login page.
+ * @description Full-screen premium authentication page supporting both
+ * Email & Password sign in / registration and Google OAuth 2.0.
  *
  * Features:
- *  • Animated gradient orbs in background (Framer Motion)
- *  • GrootAi branding with glassmorphic card
+ *  • Toggle between "Sign In" and "Create Account"
+ *  • Clean email & password input validation
+ *  • Real-time error feedback banner
  *  • Official "Sign in with Google" button (brand-compliant)
- *  • "Continue as Guest (Demo Mode)" secondary CTA
- *  • Animated feature highlight pills
+ *  • "Continue as Guest (Demo Mode)" 1-click CTA
+ *  • Animated gradient orbs and Framer Motion micro-interactions
  *  • PropTypes validation
  */
-import React, { memo }              from 'react';
-import { motion }                   from 'framer-motion';
-import { useDispatch }              from 'react-redux';
-import PropTypes                    from 'prop-types';
-import { enterGuestMode }           from '../store/authSlice.js';
+import React, { useState, memo }     from 'react';
+import { motion, AnimatePresence }   from 'framer-motion';
+import { useDispatch, useSelector }  from 'react-redux';
+import PropTypes                     from 'prop-types';
+import {
+  loginWithEmail,
+  registerWithEmail,
+  enterGuestMode,
+  clearAuthError,
+}                                    from '../store/authSlice.js';
 import {
   Sparkles, ShieldCheck, Cpu, Zap, Database,
-  Users, ArrowRight,
-} from 'lucide-react';
+  Users, ArrowRight, Mail, Lock, User, AlertCircle, Loader2,
+}                                    from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Feature pill data
@@ -61,23 +68,23 @@ FeaturePill.propTypes   = {
 // ---------------------------------------------------------------------------
 const GoogleSignInButton = memo(() => {
   const handleGoogleLogin = () => {
-    // Redirect to the backend Google OAuth initiation endpoint
     window.location.href = '/api/auth/google';
   };
 
   return (
     <motion.button
-      whileHover={{ scale: 1.02, boxShadow: '0 0 24px rgba(255,255,255,0.08)' }}
-      whileTap={{ scale: 0.98 }}
+      type="button"
+      whileHover={{ scale: 1.01, boxShadow: '0 0 20px rgba(255,255,255,0.06)' }}
+      whileTap={{ scale: 0.99 }}
       onClick={handleGoogleLogin}
       className="w-full flex items-center justify-center space-x-3
                  bg-white hover:bg-gray-50 text-gray-700 font-semibold
-                 text-sm rounded-xl px-5 py-3.5
-                 border border-gray-200 shadow-lg
+                 text-xs rounded-xl px-4 py-2.5
+                 border border-gray-200 shadow-md
                  transition-colors cursor-pointer"
     >
       {/* Official Google "G" SVG logo */}
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
         <path
           d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
           fill="#4285F4"
@@ -95,7 +102,7 @@ const GoogleSignInButton = memo(() => {
           fill="#EA4335"
         />
       </svg>
-      <span>Sign in with Google</span>
+      <span>Continue with Google</span>
     </motion.button>
   );
 });
@@ -103,15 +110,55 @@ const GoogleSignInButton = memo(() => {
 GoogleSignInButton.displayName = 'GoogleSignInButton';
 
 // ---------------------------------------------------------------------------
-// Page
+// Page Component
 // ---------------------------------------------------------------------------
 
 export const LoginPage = () => {
   const dispatch = useDispatch();
+  const { authSubmitting, error } = useSelector((s) => s.auth);
+
+  const [mode, setMode]         = useState('login'); // 'login' | 'register'
+  const [name, setName]         = useState('');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [localError, setLocalError] = useState('');
+
+  const handleTabChange = (newMode) => {
+    setMode(newMode);
+    setLocalError('');
+    dispatch(clearAuthError());
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLocalError('');
+    dispatch(clearAuthError());
+
+    if (!email.trim() || !password.trim()) {
+      setLocalError('Please enter both your email address and password.');
+      return;
+    }
+
+    if (mode === 'register') {
+      if (!name.trim()) {
+        setLocalError('Please enter your full name.');
+        return;
+      }
+      if (password.length < 6) {
+        setLocalError('Password must be at least 6 characters long.');
+        return;
+      }
+      dispatch(registerWithEmail({ name, email, password }));
+    } else {
+      dispatch(loginWithEmail({ email, password }));
+    }
+  };
+
+  const displayError = localError || error;
 
   return (
     <div className="min-h-screen bg-dark-950 flex items-center justify-center
-                    px-4 overflow-hidden relative">
+                    px-4 py-8 overflow-hidden relative">
 
       {/* ── Animated Background Orbs ────────────────────────────────── */}
       <motion.div
@@ -146,105 +193,205 @@ export const LoginPage = () => {
           {/* Top gradient bar */}
           <div className="h-1 bg-gradient-to-r from-brand-indigo via-brand-cyan to-brand-500" />
 
-          <div className="px-8 pt-10 pb-8 space-y-8">
+          <div className="px-7 pt-8 pb-7 space-y-6">
 
             {/* ── Brand Header ────────────────────────────────────── */}
             <motion.div
-              initial={{ opacity: 0, y: -12 }}
+              initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15, duration: 0.4 }}
-              className="text-center space-y-3"
+              className="text-center space-y-2"
             >
-              <div className="flex items-center justify-center space-x-2.5 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-indigo to-brand-500
+              <div className="flex items-center justify-center space-x-2.5 mb-2">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-indigo to-brand-500
                                 flex items-center justify-center shadow-glow-indigo">
-                  <Sparkles className="w-5 h-5 text-white" />
+                  <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <span className="text-xl font-extrabold text-white tracking-tight">
                   GrootAi
                 </span>
               </div>
-              <h1 className="text-2xl font-extrabold text-white leading-tight">
-                Welcome back
+              <h1 className="text-xl font-extrabold text-white leading-tight">
+                {mode === 'login' ? 'Sign in to your account' : 'Create your account'}
               </h1>
               <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                Sign in to access the Enterprise Agentic Data Quality &amp; Observability Platform.
+                Autonomous Agentic Data Quality &amp; Observability Platform
               </p>
             </motion.div>
 
-            {/* ── Feature Pills ────────────────────────────────────── */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.25 }}
-              className="grid grid-cols-2 gap-3 py-2"
-            >
-              {FEATURES.map((f, i) => (
-                <FeaturePill
-                  key={f.label}
-                  icon={f.icon}
-                  label={f.label}
-                  delay={0.3 + i * 0.07}
-                />
-              ))}
-            </motion.div>
+            {/* ── Mode Switcher Tabs ───────────────────────────────── */}
+            <div className="flex p-1 bg-slate-900/90 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => handleTabChange('login')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  mode === 'login'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTabChange('register')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  mode === 'register'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Register
+              </button>
+            </div>
 
-            {/* ── Auth Actions ─────────────────────────────────────── */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.4 }}
-              className="space-y-3"
-            >
-              {/* Primary: Google Sign In */}
-              <GoogleSignInButton />
+            {/* ── Error Banner ─────────────────────────────────────── */}
+            <AnimatePresence>
+              {displayError && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center space-x-2"
+                >
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="leading-snug">{displayError}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-              {/* Divider */}
-              <div className="flex items-center space-x-3">
-                <div className="flex-1 h-px bg-slate-800" />
-                <span className="text-[11px] text-slate-500 font-medium">or</span>
-                <div className="flex-1 h-px bg-slate-800" />
+            {/* ── Email & Password Form ────────────────────────────── */}
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              {mode === 'register' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-1"
+                >
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Alex Morgan"
+                      className="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                    />
+                  </div>
+                </motion.div>
+              )}
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@company.com"
+                    className="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+                  />
+                </div>
               </div>
 
-              {/* Secondary: Guest Demo Mode */}
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={mode === 'register' ? 'Min 6 characters' : 'Enter your password'}
+                    className="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
               <motion.button
+                type="submit"
+                disabled={authSubmitting}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                className="w-full flex items-center justify-center space-x-2
+                           bg-gradient-to-r from-brand-500 to-brand-600
+                           hover:from-brand-400 hover:to-brand-500
+                           text-slate-950 font-bold text-xs rounded-xl py-3
+                           shadow-glow-emerald transition-all cursor-pointer
+                           disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              >
+                {authSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{mode === 'login' ? 'Signing in…' : 'Creating Account…'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{mode === 'login' ? 'Sign In with Email' : 'Create Account'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </motion.button>
+            </form>
+
+            {/* ── Divider ──────────────────────────────────────────── */}
+            <div className="flex items-center space-x-3">
+              <div className="flex-1 h-px bg-slate-800" />
+              <span className="text-[11px] text-slate-500 font-medium">or continue with</span>
+              <div className="flex-1 h-px bg-slate-800" />
+            </div>
+
+            {/* ── Social & Guest CTAs ──────────────────────────────── */}
+            <div className="space-y-2.5">
+              <GoogleSignInButton />
+
+              <motion.button
+                type="button"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 onClick={() => dispatch(enterGuestMode())}
                 className="w-full flex items-center justify-center space-x-2
                            text-xs text-slate-400 hover:text-slate-200
-                           py-3 rounded-xl border border-slate-800
+                           py-2.5 rounded-xl border border-slate-800
                            hover:border-slate-700 hover:bg-slate-900/50
                            transition-all font-semibold"
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>Continue as Guest (Demo Mode)</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span>Explore as Guest (1-Click Demo)</span>
               </motion.button>
-            </motion.div>
+            </div>
 
-            {/* ── Footer Note ──────────────────────────────────────── */}
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              className="text-center text-[11px] text-slate-600 leading-relaxed"
-            >
-              Guest mode is read-only. Sign in with Google to activate rules,
-              approve remediations, and have your name recorded in the audit log.
-            </motion.p>
+            {/* ── Feature Pills ────────────────────────────────────── */}
+            <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-800/80">
+              {FEATURES.map((f, i) => (
+                <FeaturePill
+                  key={f.label}
+                  icon={f.icon}
+                  label={f.label}
+                  delay={0.2 + i * 0.05}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Bottom tagline */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.7 }}
-          className="text-center text-[11px] text-slate-600 mt-5"
-        >
+        <p className="text-center text-[11px] text-slate-600 mt-4">
           GrootAi · Zero Unsupervised Data Mutations · MCP Protocol
-        </motion.p>
+        </p>
       </motion.div>
     </div>
   );
