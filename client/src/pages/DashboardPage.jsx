@@ -67,7 +67,7 @@ export const DashboardPage = ({ onOpenUpload, onNavigate }) => {
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            CLAIRE-powered auto-profiling, natural language rule execution, and explainable deduplication.
+            AI-powered auto-profiling, natural language rule execution, and explainable deduplication.
           </p>
         </div>
 

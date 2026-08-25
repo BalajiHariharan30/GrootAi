@@ -17,7 +17,7 @@ export const MatchExplainModal = ({ explanation, onClose, onProposeFix }) => {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="text-base font-bold text-white tracking-tight">CLAIRE™ Match Analysis & Explainability</h3>
+                <h3 className="text-base font-bold text-white tracking-tight">Fuzzy Match Analysis &amp; Explainability</h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
                   {confidencePercent}% MATCH CONFIDENCE
                 </span>

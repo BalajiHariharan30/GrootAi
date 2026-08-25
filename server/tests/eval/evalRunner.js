@@ -38,7 +38,7 @@ export async function runEvaluationSuite() {
   ];
 
   console.log(`\n======================================================`);
-  console.log(`  GrootAi — Automated Evaluation Suite (CLAIRE)         `);
+  console.log(`  GrootAi — Automated Evaluation Suite (Agentic Core)  `);
   console.log(`======================================================\n`);
 
   // --- Part 1: NL-to-Rule Parsing Benchmark (25 labeled cases) ---

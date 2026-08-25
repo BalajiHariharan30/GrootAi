@@ -192,7 +192,7 @@ function AppShell() {
                         flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-2">
             <Sparkles className="w-4 h-4 text-brand-400" />
-            <span>GrootAi · Agentic Data Quality Platform inspired by Informatica CLAIRE® + IDMC</span>
+            <span>GrootAi · Autonomous Agentic Data Quality &amp; Observability Platform</span>
           </div>
           <div className="flex items-center space-x-4 text-slate-400 font-mono text-[11px]">
             <span className={`flex items-center space-x-1 ${isConnected ? 'text-emerald-400' : 'text-slate-500'}`}>

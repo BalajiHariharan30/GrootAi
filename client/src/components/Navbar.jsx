@@ -49,7 +49,7 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenUpload }) => {
               <span className="font-extrabold text-lg tracking-tight text-white">GrootAi</span>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-brand-500/10
                                text-brand-400 border border-brand-500/20 uppercase tracking-wider">
-                CLAIRE AI
+                AGENTIC AI
               </span>
             </div>
             <p className="text-[11px] text-slate-400 tracking-wide font-medium">

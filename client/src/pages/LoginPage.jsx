@@ -168,8 +168,7 @@ export const LoginPage = () => {
                 Welcome back
               </h1>
               <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                Sign in to access the Agentic Data Quality Platform.
-                Inspired by Informatica CLAIRE® + IDMC.
+                Sign in to access the Enterprise Agentic Data Quality &amp; Observability Platform.
               </p>
             </motion.div>
 

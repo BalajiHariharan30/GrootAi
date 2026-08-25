@@ -1,7 +1,6 @@
-# GrootAi — Agentic Data Quality & Observability Platform
-> **Architecture inspired by Informatica CLAIRE® + IDMC**
+# GrootAi — Autonomous Agentic Data Quality & Observability Platform
 
-GrootAi is an enterprise-grade agentic data quality and observability platform that bridges the gap between natural language business requirements and strict, deterministic, high-throughput data operations.
+GrootAi is an enterprise-grade agentic data quality and observability platform that bridges the gap between natural language business requirements and strict, deterministic, high-throughput data operations with human-in-the-loop governance.
 
 ---
 
@@ -48,16 +47,16 @@ graph TB
 
 ---
 
-## 2. Key Modules & Informatica CLAIRE® Mapping
+## 2. Core Modules & Capabilities
 
-| Module | Informatica CLAIRE / IDMC Capability | Description |
+| Module | Capability Area | Description |
 |---|---|---|
-| **Auto-Profiling** | IDMC Automated Cataloging | Profiles types, null %, distinct cardinality, value distribution histograms, and tracks schema drift across profile versions. |
-| **NL Rule Studio** | CLAIRE Data Quality Agent | Converts plain English rules into executable ASTs via grounded tool calling with Execute-Before-Trust validation. |
-| **Explainable Deduplication** | CLAIRE Match Analysis | Multi-field fuzzy + exact matching (Jaro-Winkler, Levenshtein, normalized phone/taxID) with field-by-field explanations and confidence scores. |
+| **Auto-Profiling** | Automated Cataloging & Observability | Profiles types, null %, distinct cardinality, value distribution histograms, and tracks schema drift across profile versions. |
+| **NL Rule Studio** | Agentic Business Logic Translation | Converts plain English rules into executable ASTs via grounded tool calling with Execute-Before-Trust validation. |
+| **Explainable Deduplication** | Entity Resolution & Matching | Multi-field fuzzy + exact matching (Jaro-Winkler, Levenshtein, normalized phone/taxID) with field-by-field explanations and confidence scores. |
 | **HITL Remediation** | Human-in-the-Loop Governance | Generates AI fix proposals with reasoning and before/after diffs; enforces human confirmation prior to any data mutation with an immutable audit log. |
 | **Google OAuth & RBAC** | Enterprise Access Management | Google Sign-In with JWT sessions, role guards (`viewer`, `steward`, `admin`), and verified actor attribution in audit logs. |
-| **Model Context Protocol** | DQ Rules as API | Exposes `run_dq_check`, `explain_match`, `propose_fix`, and `get_dataset_profile` as callable MCP tools for external agents. |
+| **Model Context Protocol** | DQ Rules as Agent Tools | Exposes `run_dq_check`, `explain_match`, `propose_fix`, and `get_dataset_profile` as callable MCP tools for external agents. |
 
 ---
 

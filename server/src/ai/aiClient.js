@@ -12,7 +12,7 @@ export class AIClient {
   static async parseNLToStructuredRule(nlInput, columns = []) {
     const columnNames = columns.map(c => c.name);
     const contextPrompt = `
-You are the CLAIRE Data Quality Agent in GrootAi.
+You are the GrootAi Data Quality Intelligence Agent.
 Given a dataset with columns: ${JSON.stringify(columns.map(c => ({ name: c.name, type: c.inferredType, sample: (c.sampleValues || []).slice(0, 2) })))}
 Translate the user's natural language business rule into a strict structured JSON rule object.
 

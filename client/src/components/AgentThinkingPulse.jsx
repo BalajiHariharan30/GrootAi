@@ -1,6 +1,6 @@
 /**
  * @module AgentThinkingPulse
- * @description Animated "CLAIRE is thinking" indicator displayed while the
+ * @description Animated "AI Agent is thinking" indicator displayed while the
  * AI tool-use call is in flight.  Uses Framer Motion staggered dot pulses
  * and a shimmer text effect so users understand the latency is intentional.
  */
@@ -28,7 +28,7 @@ const DOT_VARIANTS = {
 /**
  * @param {{ message?: string }} props
  */
-export const AgentThinkingPulse = ({ message = 'CLAIRE is compiling your rule…' }) => (
+export const AgentThinkingPulse = ({ message = 'AI Agent is compiling your rule…' }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.95 }}
     animate={{ opacity: 1, scale: 1 }}

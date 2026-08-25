@@ -1,6 +1,6 @@
 /**
  * @module RuleComposerPage
- * @description The CLAIRE™ Natural Language Rule Studio.
+ * @description The GrootAi Natural Language Rule Studio.
  *
  * Key engineering decisions:
  *  • Input is validated client-side (min 10 chars) before dispatch
@@ -187,7 +187,7 @@ export const RuleComposerPage = () => {
         >
           <div className="flex items-center space-x-2">
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
-              CLAIRE™ Natural Language Rule Studio
+              Natural Language Rule Studio
             </h1>
             <StatusBadge label="Agentic Tool Use" variant="info" dot pulse />
           </div>
@@ -281,7 +281,7 @@ export const RuleComposerPage = () => {
         <AnimatePresence>
           {parsing && (
             <motion.div key="thinking" exit={{ opacity: 0 }}>
-              <AgentThinkingPulse message="CLAIRE is compiling and validating your rule…" />
+              <AgentThinkingPulse message="GrootAi Agent is compiling and validating your rule…" />
             </motion.div>
           )}
         </AnimatePresence>

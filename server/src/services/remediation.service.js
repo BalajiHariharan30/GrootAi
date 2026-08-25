@@ -22,7 +22,7 @@ export class RemediationService {
       auditLog: [{
         action: 'PROPOSAL_GENERATED',
         timestamp: new Date(),
-        actor: 'GrootAi Agent (CLAIRE AI)',
+        actor: 'GrootAi Remediation Agent',
         details: `Generated fix proposal using strategy '${proposal.strategy}' with ${(proposal.confidence * 100).toFixed(0)}% confidence.`
       }]
     };
