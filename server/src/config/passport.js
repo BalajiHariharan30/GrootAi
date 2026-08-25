@@ -15,18 +15,37 @@
  */
 import passport            from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import dotenv              from 'dotenv';
+import path                from 'path';
+import { fileURLToPath }   from 'url';
 import { User }            from '../models/User.js';
 import { store }           from '../data/inMemoryStore.js';
 import { getDBStatus }     from '../config/db.js';
 import logger              from '../config/logger.js';
 
+// Load .env from both local and root if present
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+dotenv.config();
+
+const clientID = process.env.GOOGLE_CLIENT_ID || 'placeholder-google-client-id';
+const clientSecret = process.env.GOOGLE_CLIENT_SECRET || 'placeholder-google-client-secret';
+const callbackURL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5000/api/auth/google/callback';
+
+if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'your_google_client_id.apps.googleusercontent.com') {
+  logger.warn({
+    event: 'oauth_config_warning',
+    message: 'GOOGLE_CLIENT_ID not set or using placeholder. Google Sign-In will require real credentials in .env, but Guest/Demo mode is fully active.'
+  });
+}
+
 passport.use(
   new GoogleStrategy(
     {
-      clientID:     process.env.GOOGLE_CLIENT_ID     ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      callbackURL:  process.env.GOOGLE_CALLBACK_URL  ??
-                    'http://localhost:5000/api/auth/google/callback',
+      clientID,
+      clientSecret,
+      callbackURL,
       scope: ['profile', 'email'],
     },
 

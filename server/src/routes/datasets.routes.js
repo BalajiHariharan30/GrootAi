@@ -59,9 +59,15 @@ router.post(
       await Issue.deleteMany({});
 
       for (const d of store.datasets) {
-        const datasetDoc = await Dataset.create(d);
+        const { _id: _oldId, ...datasetData } = d;
+        const datasetDoc = await Dataset.create(datasetData);
         const recs       = store.records.filter((r) => r.datasetId === d._id);
-        await Record.insertMany(recs.map((r) => ({ ...r, datasetId: datasetDoc._id })));
+        await Record.insertMany(
+          recs.map((r) => {
+            const { _id: _recOldId, ...recData } = r;
+            return { ...recData, datasetId: datasetDoc._id };
+          }),
+        );
       }
     }
 
@@ -326,8 +332,15 @@ router.post(
     };
 
     if (getDBStatus()) {
-      const doc = await Dataset.create(dataset);
-      await Record.insertMany(rawRecords.map((r) => ({ ...r, datasetId: doc._id })));
+      const { _id: _dsId, ...dsData } = dataset;
+      const doc = await Dataset.create(dsData);
+      await Record.insertMany(
+        rawRecords.map((r) => {
+          const { _id: _rId, ...rData } = r;
+          return { ...rData, datasetId: doc._id };
+        }),
+      );
+      dataset._id = doc._id;
     } else {
       store.datasets.unshift(dataset);
       store.records.push(...rawRecords);
