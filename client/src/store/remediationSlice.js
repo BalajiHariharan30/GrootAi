@@ -149,19 +149,39 @@ export const fetchExplanation = createAsyncThunk(
   },
 );
 
+export const fetchLearningStats = createAsyncThunk(
+  'remediation/learningStats',
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await fetch('/api/remediation/learning/stats', {
+        headers:     authHeaders(),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      return data.data;
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  },
+);
+
 
 const remediationSlice = createSlice({
   name: 'remediation',
   initialState: {
-    pendingList:         [],
-    auditLog:            [],
-    loading:             false,
-    actionInProgressId:  null,
-    lastApprovedAction:  null,
+    pendingList:          [],
+    auditLog:             [],
+    loading:              false,
+    actionInProgressId:   null,
+    lastApprovedAction:   null,
     rollbackInProgressId: null,
-    explanation:         null,
-    explanationLoading:  false,
-    error:               null,
+    explanation:          null,
+    explanationLoading:   false,
+    learningStats:        null,
+    learningStatsLoading: false,
+    error:                null,
+
   },
   reducers: {
     clearLastApproved: (state) => {
@@ -226,7 +246,19 @@ const remediationSlice = createSlice({
       })
       .addCase(fetchExplanation.rejected, (state) => {
         state.explanationLoading = false;
+      })
+      // Learning Stats
+      .addCase(fetchLearningStats.pending, (state) => {
+        state.learningStatsLoading = true;
+      })
+      .addCase(fetchLearningStats.fulfilled, (state, action) => {
+        state.learningStatsLoading = false;
+        state.learningStats        = action.payload;
+      })
+      .addCase(fetchLearningStats.rejected, (state) => {
+        state.learningStatsLoading = false;
       });
+
   },
 });
 

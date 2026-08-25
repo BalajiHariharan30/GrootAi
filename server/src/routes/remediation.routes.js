@@ -18,10 +18,12 @@ import { Record }                    from '../models/Record.js';
 import { store }                     from '../data/inMemoryStore.js';
 import { getDBStatus }               from '../config/db.js';
 import { RemediationService }        from '../services/remediation.service.js';
+import { LearningService }           from '../services/learning.service.js';
 import { cache }                     from '../cache/redisClient.js';
 import { asyncHandler }              from '../middleware/asyncHandler.js';
 import { validate }                  from '../middleware/validate.js';
 import logger                        from '../config/logger.js';
+
 
 const router = express.Router();
 
@@ -192,6 +194,18 @@ router.post(
       field:         remediation.targetField,
     });
 
+    // ── Continuous Learning: record human approval signal ──────────────────
+    await LearningService.recordFeedback({
+      remediationId: String(remediation._id),
+      datasetId:     String(remediation.datasetId),
+      issueType:     issue?.type ?? 'unknown',
+      strategy:      remediation.strategy,
+      targetField:   remediation.targetField,
+      outcome:       'approved',
+      actorName:     approver,
+      confidence:    remediation.confidence,
+    });
+
     res.json({
       success: true,
       message: 'Mutation applied — audit log entry recorded.',
@@ -199,6 +213,7 @@ router.post(
     });
   }),
 );
+
 
 // ── POST /api/remediation/:id/reject ─────────────────────────────────────
 /**
@@ -239,6 +254,18 @@ router.post(
 
     logger.info({ event: 'remediation_rejected', remediationId: String(remediation._id), reason });
 
+    // ── Continuous Learning: record human rejection signal ─────────────────
+    await LearningService.recordFeedback({
+      remediationId: String(remediation._id),
+      datasetId:     String(remediation.datasetId),
+      issueType:     'unknown', // issue not fetched in reject path — use stored strategy
+      strategy:      remediation.strategy,
+      targetField:   remediation.targetField,
+      outcome:       'rejected',
+      actorName:     'Human Data Steward',
+      confidence:    remediation.confidence,
+    });
+
     res.json({
       success: true,
       message: 'Rejection recorded in audit trail.',
@@ -246,6 +273,7 @@ router.post(
     });
   }),
 );
+
 
 // ── POST /api/remediation/:id/rollback ───────────────────────────────────
 /**
@@ -336,6 +364,18 @@ router.post(
       reason,
     });
 
+    // ── Continuous Learning: record rollback as negative signal ────────────
+    await LearningService.recordFeedback({
+      remediationId: String(remediation._id),
+      datasetId:     String(remediation.datasetId),
+      issueType:     'unknown',
+      strategy:      remediation.strategy,
+      targetField:   remediation.targetField,
+      outcome:       'rolled_back',
+      actorName:     rolledBackBy,
+      confidence:    remediation.confidence,
+    });
+
     res.json({
       success: true,
       message: `Rollback complete — value restored to original. Audit entry recorded.`,
@@ -343,6 +383,7 @@ router.post(
     });
   }),
 );
+
 
 // ── GET /api/remediation/:id/explain ─────────────────────────────────────
 /**
@@ -467,5 +508,20 @@ router.get(
   }),
 );
 
+// ── GET /api/remediation/learning/stats ──────────────────────────────────
+/**
+ * Continuous Learning Dashboard endpoint.
+ * Returns the full calibration matrix, per-strategy approval rates,
+ * overall health status, and recent trend — powering the AI Learning panel.
+ */
+router.get(
+  '/learning/stats',
+  asyncHandler(async (req, res) => {
+    const stats = await LearningService.getLearningStats();
+    res.json({ success: true, data: stats });
+  }),
+);
+
 export default router;
+
 

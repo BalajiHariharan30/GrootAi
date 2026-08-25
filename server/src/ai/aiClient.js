@@ -287,11 +287,31 @@ User Rule: "${nlInput}"
   }
 
   /**
-   * Generates agent remediation proposal with reasoning
+   * Generates agent remediation proposal with reasoning.
+   * @param {Object} issue  - Issue object from the profiler/rule engine
+   * @param {Object} record - The raw record row
+   * @param {Object} [calibrationMap={}] - Historical approval rates from LearningService.
+   *   Shape: { [issueType]: { [strategy]: approvalRate 0–1 } }
+   *   When provided, these rates replace hardcoded confidence constants.
    */
-  static generateRemediationProposal(issue, record) {
+  static generateRemediationProposal(issue, record, calibrationMap = {}) {
     const field = issue.field || 'target';
-    const val = issue.currentValue;
+    const val   = issue.currentValue;
+
+    /**
+     * Look up calibrated confidence for a given (issueType, strategy) pair.
+     * Falls back to `staticDefault` if no history exists yet.
+     */
+    const calibratedConfidence = (issueType, strategy, staticDefault) => {
+      const rate = calibrationMap?.[issueType]?.[strategy]
+        ?? calibrationMap?.['unknown']?.[strategy]
+        ?? null;
+      // Blend: 70% historical rate + 30% static prior for stability
+      if (rate !== null) {
+        return Math.min(0.99, Math.max(0.05, +(rate * 0.7 + staticDefault * 0.3).toFixed(3)));
+      }
+      return staticDefault;
+    };
 
     if (issue.type === 'format_error' || field.toLowerCase().includes('phone')) {
       const digits = String(val).replace(/\D/g, '');
@@ -313,7 +333,7 @@ User Rule: "${nlInput}"
           diffDetails: `Standardized raw telecommunication sequence '${val}' to canonical format '${formatted}'`
         },
         agentReasoning: `Record contains unformatted or inconsistent phone digits. Standardizing ensures downstream telephony, SMS, and CRM integration fidelity.`,
-        confidence: 0.96
+        confidence: calibratedConfidence('format_error', 'format_standardize', 0.96),
       };
     }
 
@@ -328,7 +348,7 @@ User Rule: "${nlInput}"
           diffDetails: `Corrected duplicated syntax symbols in '${val}' -> '${cleaned}'`
         },
         agentReasoning: `Detected duplicated delimiter '@' and '.' syntax error in email address. Reconstructed valid RFC syntax.`,
-        confidence: 0.94
+        confidence: calibratedConfidence('format_error', 'domain_fix', 0.94),
       };
     }
 
@@ -342,7 +362,7 @@ User Rule: "${nlInput}"
           diffDetails: `Combined populated fields from secondary record into survivor primary record.`
         },
         agentReasoning: `Multi-field fuzzy score exceeds duplicate threshold (${Math.round((issue.matchConfidence || 0.9) * 100)}%). Recommend merging into a single canonical Master Data Record.`,
-        confidence: issue.matchConfidence || 0.92
+        confidence: calibratedConfidence('duplicate', 'merge_records', issue.matchConfidence || 0.92),
       };
     }
 
@@ -356,7 +376,7 @@ User Rule: "${nlInput}"
           diffDetails: `Clamped bounds and normalized anomalous value.`
         },
         agentReasoning: `Detected violation of domain boundary rules. Proposing normalized default value for review.`,
-        confidence: 0.88
+        confidence: calibratedConfidence('outlier', 'custom_patch', 0.88),
       };
     }
 
@@ -369,7 +389,8 @@ User Rule: "${nlInput}"
         diffDetails: `Imputed missing mandatory field.`
       },
       agentReasoning: `Mandatory field was empty or null. Proposing standard enterprise placeholder.`,
-      confidence: 0.85
+      confidence: calibratedConfidence('missing_value', 'impute_default', 0.85),
     };
   }
 }
+

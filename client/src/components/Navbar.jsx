@@ -12,8 +12,9 @@ import { motion, AnimatePresence }       from 'framer-motion';
 import {
   Database, Sparkles, Layers, ShieldAlert,
   UserCheck, Cpu, Activity, RefreshCw, Play, BarChart3,
-  Settings, Bell, X,
+  Settings, Bell, X, Menu,
 } from 'lucide-react';
+
 
 const NAV_TABS = [
   { id: 'dashboard',   label: 'Catalog',       icon: Database    },
@@ -31,7 +32,9 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenUpload }) => {
   const { pendingList }       = useSelector((s) => s.remediation);
   const { user, isGuestMode } = useSelector((s) => s.auth);
 
-  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifOpen,  setNotifOpen]  = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
 
   // Collect recent notifications from pending list as a simple bell panel
   const notifications = pendingList.slice(0, 5).map((p) => ({
@@ -212,13 +215,65 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenUpload }) => {
             </AnimatePresence>
           </div>
 
+          {/* Hamburger — mobile only */}
+          <button
+            className="md:hidden p-2 rounded-lg bg-slate-900 border border-slate-800
+                       text-slate-400 hover:text-white transition-colors"
+            onClick={() => setMobileOpen((v) => !v)}
+          >
+            {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
+
           {/* User Avatar */}
           <UserAvatar user={user} isGuestMode={isGuestMode} />
         </div>
       </div>
+
+      {/* ── Mobile Slide-Down Nav Drawer ──────────────────────────── */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="md:hidden border-t border-slate-800 bg-dark-950/98 px-4 py-3 space-y-1 overflow-hidden"
+          >
+            {NAV_TABS.map((tab) => {
+              const Icon     = tab.icon;
+              const isActive = activeTab === tab.id;
+              const badge    = tab.id === 'remediation' ? pendingList?.length : null;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => { setActiveTab(tab.id); setMobileOpen(false); }}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm
+                              font-semibold transition-all ${
+                    isActive
+                      ? 'bg-slate-800 text-white border border-slate-700'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-brand-400' : ''}`} />
+                    <span>{tab.label}</span>
+                  </div>
+                  {badge > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold
+                                     bg-brand-amber/20 text-brand-amber border border-brand-amber/30">
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 };
+
 
 Navbar.propTypes = {
   activeTab:    PropTypes.string.isRequired,

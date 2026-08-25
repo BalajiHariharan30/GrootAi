@@ -19,7 +19,7 @@ import PropTypes                                         from 'prop-types';
 import {
   ShieldAlert, Sparkles, Filter, ArrowRight,
   CheckCircle2, Cpu, X, AlertTriangle, AlertCircle,
-  Info, ChevronDown,
+  Info, ChevronDown, Download,
 } from 'lucide-react';
 
 import {
@@ -30,9 +30,11 @@ import {
   dismissIssue,
 }                                from '../store/issueSlice.js';
 import { proposeRemediation }    from '../store/remediationSlice.js';
+import { ExportService }         from '../services/ExportService.js';
 import { MatchExplainModal }     from '../components/MatchExplainModal.jsx';
 import { StatusBadge }           from '../components/StatusBadge.jsx';
 import { PageTransition }        from '../components/PageTransition.jsx';
+
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -230,6 +232,18 @@ export const IssueReviewPage = ({ onNavigate }) => {
             </p>
           </div>
 
+          <div className="flex items-center space-x-2.5 flex-wrap gap-2">
+            <button
+              onClick={() => ExportService.downloadIssuesCSV(issues, `issues-${new Date().toISOString().slice(0,10)}`)}
+              disabled={issues.length === 0}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800
+                         hover:bg-slate-700 text-slate-200 border border-slate-700
+                         flex items-center space-x-1.5 transition-colors disabled:opacity-40"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Issues CSV</span>
+            </button>
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
@@ -241,6 +255,7 @@ export const IssueReviewPage = ({ onNavigate }) => {
             <span>Go to HITL Approval Inbox</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </motion.button>
+          </div>
         </motion.div>
 
         {/* ── Filter Toolbar ────────────────────────────────────────── */}
