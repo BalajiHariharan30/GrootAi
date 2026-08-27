@@ -1,0 +1,51 @@
+customerId,fullName,email,phoneNumber,companyTier,lifetimeValue,postalCode,country,status
+CUST-2001,Alexander Pierce,a.pierce@apexcorp.com,+1-415-555-0101,Enterprise,125000,94105,USA,active
+CUST-2002,Alexander Pierce,a.pierce@apexcorp.com,+1-415-555-0101,Enterprise,125000,94105,USA,active
+CUST-2003,Sarah Jenkins,s.jenkins@@skyreach..io,4155550102,Mid-Market,45000,94016,USA,active
+CUST-2004,Marcus Vance,m.vance@vanguard.co.uk,+44-20-7946-0912,Enterprise,210000,,UK,active
+CUST-2005,Elena Rostova,elena.r@rostov-tech.de,+49-30-1234567,Startup,18500,10115,Germany,active
+CUST-2006,Elena Rostova,elena.rostova@rostov-tech.de,+49-30-1234567,Startup,18500,10115,Germany,active
+CUST-2007,David K. Chen,dchen@pacifichorizon.sg,+65-6789-0123,Enterprise,890000,018956,Singapore,active
+CUST-2008,Amira Al-Mansoor,amira.m@gulfcapital.ae,971501234567,Enterprise,640000,00000,UAE,active
+CUST-2009,Lucas Silva,lucas.silva@saopaulolog.br,+55-11-98765-4321,Mid-Market,32000,,Brazil,active
+CUST-2010,Claire Beaumont,c.beaumont@lumiere-paris.fr,0142685555,Enterprise,-5000,75008,France,suspended
+CUST-2011,Kenji Takahashi,k.takahashi@tokyosystems.jp,+81-3-5555-0143,Enterprise,475000,100-0001,Japan,active
+CUST-2012,Kenji Takahashi,kenji.takahashi@tokyosystems.jp,+81-3-5555-0143,Enterprise,475000,100-0001,Japan,active
+CUST-2013,Priya Sharma,priya.sharma@@infratech..in,919876543210,Enterprise,310000,560001,India,active
+CUST-2014,Oliver Hansen,o.hansen@nordicenergy.no,+47-22-33-44-55,Enterprise,520000,0150,Norway,active
+CUST-2015,Fatima Zahra,f.zahra@atlasconsulting.ma,+212-522-123456,Mid-Market,28000,20000,Morocco,active
+CUST-2016,Mateo Rodriguez,m.rodriguez@madridretail.es,+34-91-123-4567,Mid-Market,67000,,Spain,active
+CUST-2017,Chloe Dupont,c.dupont@genevafinance.ch,+41-22-789-0123,Enterprise,1200000,1201,Switzerland,active
+CUST-2018,Dmitri Volkov,d.volkov@balticshipping.ee,+372-612-3456,Startup,14000,10111,Estonia,pending_verification
+CUST-2019,Ananya Patel,ananya.p@mumbaitech.in,9820011223,Enterprise,190000,400001,India,active
+CUST-2020,Liam O'Connor,liam@dublindata.ie,+353-1-496-0123,Mid-Market,54000,,Ireland,active
+CUST-2021,Liam O'Connor,liam.oconnor@dublindata.ie,+353-1-496-0123,Mid-Market,54000,D02,Ireland,active
+CUST-2022,Zubair Khan,z.khan@lahoretextiles.pk,923001234567,Enterprise,85000,54000,Pakistan,active
+CUST-2023,Hannah Abbott,h.abbott@yorkshiremfg.co.uk,+44-113-496-0123,Mid-Market,-1200,LS1,UK,active
+CUST-2024,Carlos Mendez,carlos.m@buenosairesagri.ar,+54-11-4321-8765,Enterprise,340000,C1002,Argentina,active
+CUST-2025,Nia Williams,nia.w@cardiffcloud.co.uk,+44-29-2018-0123,Startup,9500,CF10,UK,active
+CUST-2026,Victor Hugo,v.hugo@@pariseditions..fr,0145678901,Enterprise,150000,75006,France,active
+CUST-2027,Ingrid Bergman,i.bergman@stockholmdigital.se,+46-8-123-4567,Enterprise,420000,11122,Sweden,active
+CUST-2028,Kwame Mensah,kwame.m@accralogistics.gh,233241234567,Mid-Market,38000,,Ghana,active
+CUST-2029,Mei Ling Zhao,meiling.z@shanghaiforward.cn,+86-21-6234-5678,Enterprise,980000,200000,China,active
+CUST-2030,Mei Ling Zhao,m.zhao@shanghaiforward.cn,+86-21-6234-5678,Enterprise,980000,200000,China,active
+CUST-2031,Jan de Vries,jan@amsterdamtrade.nl,+31-20-555-0199,Enterprise,610000,1012,Netherlands,active
+CUST-2032,Sofia Rossi,s.rossi@milanoapparel.it,+39-02-1234-5678,Mid-Market,72000,20121,Italy,active
+CUST-2033,Gabriel Santos,gabriel.s@lisbonports.pt,351211234567,Startup,22000,1100,Portugal,active
+CUST-2034,Evelyn Wright,e.wright@bostondynamics.org,+1-617-555-0144,Enterprise,88000000,02138,USA,active
+CUST-2035,Tariq Mahmood,tariq.m@riyadhholdings.sa,+966-11-234-5678,Enterprise,1450000,11564,Saudi Arabia,active
+CUST-2036,Aarav Gupta,aarav.g@delhicapital.in,919911223344,Enterprise,290000,110001,India,active
+CUST-2037,Freja Nielsen,f.nielsen@copenhagendesign.dk,+45-32-12-34-56,Mid-Market,48000,1050,Denmark,active
+CUST-2038,Min-Jun Park,minjun.park@seoulsemi.kr,+82-2-3456-7890,Enterprise,730000,04524,South Korea,active
+CUST-2039,Min-Jun Park,m.park@seoulsemi.kr,+82-2-3456-7890,Enterprise,730000,04524,South Korea,active
+CUST-2040,Leila Habibi,l.habibi@tunistrading.tn,+216-71-123-456,Startup,16000,,Tunisia,pending_verification
+CUST-2041,Patrick Murphy,p.murphy@corkbiotech.ie,+353-21-496-0123,Enterprise,390000,T12,Ireland,active
+CUST-2042,Katarina Novak,k.novak@pragueconsulting.cz,+420-221-123-456,Mid-Market,56000,11000,Czech Republic,active
+CUST-2043,Joshua Taylor,j.taylor@austinmicro.com,5125550188,Enterprise,240000,78701,USA,active
+CUST-2044,Valeria Morales,v.morales@@santiagomining..cl,+56-2-2345-6789,Enterprise,810000,8320000,Chile,active
+CUST-2045,Hassan Mostafa,h.mostafa@cairoexport.eg,+20-2-2345-6789,Mid-Market,41000,11511,Egypt,active
+CUST-2046,Maya Lin,maya.lin@vancouverlog.ca,+1-604-555-0177,Enterprise,360000,V6B,Canada,active
+CUST-2047,Stefan Mueller,s.mueller@viennaalpha.at,+43-1-515-0123,Enterprise,590000,1010,Austria,active
+CUST-2048,Stefan Mueller,stefan.mueller@viennaalpha.at,+43-1-515-0123,Enterprise,590000,1010,Austria,active
+CUST-2049,Grace Kim,g.kim@aucklandagritech.nz,+64-9-123-4567,Mid-Market,62000,1010,New Zealand,active
+CUST-2050,Benjamin Scott,b.scott@sydneyenergy.com.au,+61-2-9123-4567,Enterprise,920000,2000,Australia,active

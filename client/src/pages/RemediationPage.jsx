@@ -163,7 +163,9 @@ export const RemediationPage = () => {
   const dispatch = useDispatch();
 
   const { pendingList, auditLog, actionInProgressId, rollbackInProgressId } = useSelector((s) => s.remediation);
+  const { list: datasets } = useSelector((s) => s.datasets);
   const { user, isGuestMode } = useSelector((s) => s.auth);
+
 
 
   const [activeTab,    setActiveTab]    = useState(TAB_PENDING);
@@ -434,7 +436,9 @@ export const RemediationPage = () => {
                           onApprove={handleApprove}
                           onReject={handleReject}
                           isProcessing={actionInProgressId === String(proposal._id)}
+                          datasetName={datasets.find((d) => String(d._id) === String(proposal.datasetId))?.name}
                         />
+
                       </motion.div>
                     ))}
                   </AnimatePresence>

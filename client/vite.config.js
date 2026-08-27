@@ -16,5 +16,19 @@ export default defineConfig({
         ws: true,
       }
     }
-  }
+  },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':  ['react', 'react-dom'],
+          'vendor-redux':  ['@reduxjs/toolkit', 'react-redux'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-ui':     ['lucide-react', 'clsx', 'tailwind-merge', 'canvas-confetti'],
+          'vendor-socket': ['socket.io-client'],
+        },
+      },
+    },
+  },
 });

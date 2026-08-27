@@ -146,13 +146,49 @@ User Rule: "${nlInput}"
       category = 'validity';
     }
 
-    // 2. Phone validity & format
-    if (text.includes('phone') && (text.includes('valid') || text.includes('format') || text.includes('standard') || text.includes('international') || text.includes('country code'))) {
-      const phoneField = targetField.toLowerCase().includes('phone') ? targetField : (columnNames.find(c => c.toLowerCase().includes('phone')) || targetField);
+    // 2. Phone validity & format (India +91 priority standard)
+    if (text.includes('phone') || text.includes('mobile') || text.includes('contact')) {
+      if (text.includes('valid') || text.includes('format') || text.includes('standard') || text.includes('international') || text.includes('+91') || text.includes('india') || text.includes('country code')) {
+        const phoneField = targetField.toLowerCase().includes('phone') || targetField.toLowerCase().includes('mobile') ? targetField : (columnNames.find(c => c.toLowerCase().includes('phone') || c.toLowerCase().includes('mobile')) || targetField);
+        conditions.push({
+          field: phoneField,
+          operator: 'phone_valid',
+          description: 'Phone must follow valid telecommunication format (+91 India standard / E.164)'
+        });
+        category = 'validity';
+      }
+    }
+
+    // 2b. Indian GSTIN / PAN / TaxId validation
+    if (text.includes('gstin') || text.includes('gst') || text.includes('pan') || text.includes('taxid') || text.includes('tax id')) {
+      const taxField = columnNames.find(c => ['taxid', 'gstin', 'pan', 'tax_id', 'gst_number'].includes(c.toLowerCase())) || targetField;
+      if (text.includes('gstin') || text.includes('gst')) {
+        conditions.push({
+          field: taxField,
+          operator: 'regex',
+          pattern: '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',
+          description: 'GSTIN must conform to 15-character Indian GST format (e.g. 29ABCDE1234F1Z5)'
+        });
+        category = 'validity';
+      } else if (text.includes('pan')) {
+        conditions.push({
+          field: taxField,
+          operator: 'regex',
+          pattern: '^[A-Z]{5}[0-9]{4}[A-Z]{1}$',
+          description: 'PAN must conform to 10-character Indian PAN format (e.g. ABCDE1234F)'
+        });
+        category = 'validity';
+      }
+    }
+
+    // 2c. Indian PIN Code / Postal Code validation (6 digits)
+    if ((text.includes('pincode') || text.includes('pin code') || text.includes('postal')) && (text.includes('6 digit') || text.includes('valid') || text.includes('format'))) {
+      const pinField = columnNames.find(c => ['postalcode', 'pincode', 'pin_code', 'zip'].includes(c.toLowerCase())) || targetField;
       conditions.push({
-        field: phoneField,
-        operator: 'phone_valid',
-        description: 'Phone must follow valid telecommunication format'
+        field: pinField,
+        operator: 'regex',
+        pattern: '^[1-9][0-9]{5}$',
+        description: 'PIN Code must be a valid 6-digit Indian Postal Code'
       });
       category = 'validity';
     }
@@ -168,7 +204,7 @@ User Rule: "${nlInput}"
       category = 'completeness';
     }
 
-    // 4. Positive numbers / Greater than zero
+    // 4. Positive numbers / Greater than zero (Rupees ₹ / Lakhs / Crores)
     if (text.includes('positive') || text.includes('greater than 0') || text.includes('> 0') || text.includes('above 0') || text.includes('cannot be negative')) {
       const numericField = targetField && targetField !== 'field' ? targetField : (columnNames.find(c => ['lifetimevalue', 'subtotal', 'totalamount', 'amount', 'price', 'quantity', 'taxamount'].includes(c.toLowerCase())) || targetField);
       conditions.push({
@@ -179,8 +215,8 @@ User Rule: "${nlInput}"
       category = 'range';
     }
 
-    // 5. Under / Max numeric bounds (e.g. "under 100000", "<= 1000000", "max 500")
-    const maxMatch = text.match(/(?:under|less than|max|below|<=|<)\s*(?:₹|\$|eur|usd)?\s*([\d,]+(?:\.\d+)?)/i);
+    // 5. Under / Max numeric bounds (e.g. "under ₹5000000", "<= 1000000", "max 500")
+    const maxMatch = text.match(/(?:under|less than|max|below|<=|<)\s*(?:₹|rs\.?|inr|\$|eur|usd)?\s*([\d,]+(?:\.\d+)?)/i);
     if (maxMatch) {
       const rawNum = maxMatch[1].replace(/,/g, '');
       const maxVal = parseFloat(rawNum);
@@ -230,7 +266,7 @@ User Rule: "${nlInput}"
 
     // 8. In set / allowed values (e.g. "status must be active, suspended, or pending")
     const setMatch = text.match(/(?:must be|one of|in)\s*\[?([a-zA-Z0-9_,\s/]+)\]?/i);
-    if (setMatch && (text.includes('status') || text.includes('type') || text.includes('tier') || text.includes('country'))) {
+    if (setMatch && (text.includes('status') || text.includes('type') || text.includes('tier') || text.includes('country') || text.includes('state') || text.includes('city'))) {
       const allowed = setMatch[1].split(/,|\bor\b|\band\b/).map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
       if (allowed.length > 1) {
         conditions.push({
@@ -313,15 +349,19 @@ User Rule: "${nlInput}"
       return staticDefault;
     };
 
-    if (issue.type === 'format_error' || field.toLowerCase().includes('phone')) {
+    if (issue.type === 'format_error' || field.toLowerCase().includes('phone') || field.toLowerCase().includes('mobile')) {
       const digits = String(val).replace(/\D/g, '');
       let formatted = val;
+      
+      // India standard phone formatting (+91-XXXXX-XXXXX)
       if (digits.length === 10) {
-        formatted = `+1-${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-      } else if (digits.length === 11 && digits.startsWith('1')) {
-        formatted = `+1-${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+        formatted = `+91-${digits.slice(0, 5)}-${digits.slice(5)}`;
       } else if (digits.length === 12 && digits.startsWith('91')) {
         formatted = `+91-${digits.slice(2, 7)}-${digits.slice(7)}`;
+      } else if (digits.length === 11 && digits.startsWith('0')) {
+        formatted = `+91-${digits.slice(1, 6)}-${digits.slice(6)}`;
+      } else if (digits.length === 11 && digits.startsWith('1')) {
+        formatted = `+1-${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
       }
 
       return {
@@ -330,12 +370,13 @@ User Rule: "${nlInput}"
         proposedFix: {
           beforeValue: val,
           afterValue: formatted,
-          diffDetails: `Standardized raw telecommunication sequence '${val}' to canonical format '${formatted}'`
+          diffDetails: `Standardized raw telecommunication digits '${val}' to Indian canonical format '${formatted}'`
         },
-        agentReasoning: `Record contains unformatted or inconsistent phone digits. Standardizing ensures downstream telephony, SMS, and CRM integration fidelity.`,
+        agentReasoning: `Record contains unformatted or raw mobile digits. Standardizing to Indian National Numbering Plan (+91 standard) ensures downstream CRM, SMS gateway, and tele-verification interoperability.`,
         confidence: calibratedConfidence('format_error', 'format_standardize', 0.96),
       };
     }
+
 
     if (issue.type === 'format_error' || field.toLowerCase().includes('email')) {
       const cleaned = String(val).replace(/@@+/g, '@').replace(/\.\.+/g, '.').trim();

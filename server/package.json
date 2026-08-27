@@ -5,10 +5,11 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "eval": "node tests/eval/runEval.js",
-    "lint": "eslint src --ext .js --report-unused-disable-directives --max-warnings 10",
+    "start":  "node src/server.js",
+    "dev":    "node --watch src/server.js",
+    "eval":   "node tests/eval/runEval.js",
+    "test":   "node --test tests/unit/**/*.test.js",
+    "lint":   "eslint src --ext .js --report-unused-disable-directives --max-warnings 10",
     "format": "prettier --write src"
   },
   "dependencies": {

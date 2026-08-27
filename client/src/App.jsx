@@ -15,7 +15,7 @@
  *
  * Each tab wrapped in <ErrorBoundary> to prevent cascade failures.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useSelector, useDispatch }                from 'react-redux';
 import { AnimatePresence }                         from 'framer-motion';
 import { Toaster }                                 from 'react-hot-toast';
@@ -26,14 +26,17 @@ import { Sparkles, Wifi, WifiOff }                 from 'lucide-react';
 import { Navbar }            from './components/Navbar.jsx';
 import { CSVUploadModal }    from './components/CSVUploadModal.jsx';
 import { ErrorBoundary }     from './components/ErrorBoundary.jsx';
-import { DashboardPage }     from './pages/DashboardPage.jsx';
-import { ProfilerPage }      from './pages/ProfilerPage.jsx';
-import { RuleComposerPage }  from './pages/RuleComposerPage.jsx';
-import { IssueReviewPage }   from './pages/IssueReviewPage.jsx';
-import { RemediationPage }   from './pages/RemediationPage.jsx';
-import { EvalSuitePage }     from './pages/EvalSuitePage.jsx';
-import { LoginPage }         from './pages/LoginPage.jsx';
-import { SettingsPage }      from './pages/SettingsPage.jsx';
+
+// Lazy-loaded pages — each page is split into its own chunk
+const DashboardPage    = lazy(() => import('./pages/DashboardPage.jsx').then(m => ({ default: m.DashboardPage })));
+const ProfilerPage     = lazy(() => import('./pages/ProfilerPage.jsx').then(m => ({ default: m.ProfilerPage })));
+const RuleComposerPage = lazy(() => import('./pages/RuleComposerPage.jsx').then(m => ({ default: m.RuleComposerPage })));
+const IssueReviewPage  = lazy(() => import('./pages/IssueReviewPage.jsx').then(m => ({ default: m.IssueReviewPage })));
+const RemediationPage  = lazy(() => import('./pages/RemediationPage.jsx').then(m => ({ default: m.RemediationPage })));
+const EvalSuitePage    = lazy(() => import('./pages/EvalSuitePage.jsx').then(m => ({ default: m.EvalSuitePage })));
+const LoginPage        = lazy(() => import('./pages/LoginPage.jsx').then(m => ({ default: m.LoginPage })));
+const SettingsPage     = lazy(() => import('./pages/SettingsPage.jsx').then(m => ({ default: m.SettingsPage })));
+
 
 
 import { fetchDatasets }     from './store/datasetSlice.js';
@@ -152,7 +155,12 @@ function AppShell() {
 
       {/* Page Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-        <AnimatePresence mode="wait">
+        <Suspense fallback={
+          <div className="flex items-center justify-center h-64">
+            <Sparkles className="w-6 h-6 text-brand-400 animate-pulse" />
+          </div>
+        }>
+          <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && (
             <ErrorBoundary key="dashboard">
               <DashboardPage onOpenUpload={() => setIsUploadOpen(true)} onNavigate={handleNavigate} />
@@ -190,6 +198,7 @@ function AppShell() {
           )}
 
         </AnimatePresence>
+        </Suspense>
       </main>
 
       <CSVUploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
@@ -299,7 +308,9 @@ export function App() {
             },
           }}
         />
-        <LoginPage />
+        <Suspense fallback={<AuthLoader />}>
+          <LoginPage />
+        </Suspense>
       </>
     );
   }

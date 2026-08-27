@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { Sparkles, Check, X, ArrowRight, ShieldCheck, Cpu, GitCommit } from 'lucide-react';
 
-export const RemediationProposalCard = ({ proposal, onApprove, onReject, isProcessing }) => {
+export const RemediationProposalCard = ({ proposal, onApprove, onReject, isProcessing, datasetName }) => {
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
 
@@ -35,8 +35,13 @@ export const RemediationProposalCard = ({ proposal, onApprove, onReject, isProce
             <Cpu className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-bold text-sm text-white">Record #{rowNumber} Remediation</span>
+              {datasetName && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                  📁 {datasetName}
+                </span>
+              )}
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 uppercase">
                 {strategyLabels[strategy] || strategy}
               </span>
@@ -44,6 +49,7 @@ export const RemediationProposalCard = ({ proposal, onApprove, onReject, isProce
             <span className="text-[11px] text-slate-400">Target Field: <span className="font-mono text-slate-300 font-bold">{targetField}</span></span>
           </div>
         </div>
+
 
         {/* Confidence chip */}
         <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-700 text-xs">

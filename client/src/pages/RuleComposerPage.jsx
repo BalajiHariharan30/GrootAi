@@ -37,14 +37,15 @@ const MIN_INPUT_LENGTH = 10;
 
 const SUGGESTED_PROMPTS = Object.freeze([
   'email must be valid and cannot be empty',
-  'phone number must match international format',
-  'taxId is mandatory and cannot be null',
-  'lifetimeValue must be positive and under 5000000',
-  'accountStatus must be one of active, suspended, or pending_verification',
+  'phone number must match +91 Indian standard',
+  'taxId must be valid 15-character GSTIN format',
+  'lifetimeValue must be positive and under ₹50,00,000',
+  'postalCode must be a valid 6-digit Indian PIN code',
   'customerId must be unique across all records',
-  'discountPercent must be between 0 and 100',
-  'country cannot be null',
+  'state must be one of Maharashtra, Karnataka, Tamil Nadu, Delhi, Gujarat, Telangana',
+  'accountStatus must be one of active, suspended, or pending_verification',
 ]);
+
 
 // ---------------------------------------------------------------------------
 // Sub-components

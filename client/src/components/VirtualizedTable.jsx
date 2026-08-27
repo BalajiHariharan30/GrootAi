@@ -59,10 +59,11 @@ const TableRow = memo(({ index, style, data }) => {
               {isNull ? (
                 <span className="text-slate-600 italic">null</span>
               ) : typeof val === 'number' ? (
-                <span className="font-mono text-cyan-300">{val.toLocaleString()}</span>
+                <span className="font-mono text-cyan-300">{val.toLocaleString('en-IN')}</span>
               ) : (
                 <span className="truncate">{String(val)}</span>
               )}
+
             </div>
           );
         })}

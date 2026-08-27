@@ -128,16 +128,17 @@ export const ColumnProfileCard = ({ column }) => {
         {(column.stats?.min !== undefined || column.stats?.avg !== undefined) && (
           <div className="flex items-center justify-around text-[11px] text-slate-500 bg-slate-900/60 rounded-lg px-2 py-1.5 mb-3 border border-slate-800/50">
             {column.stats?.min !== undefined && (
-              <span>Min: <span className="text-slate-300 font-mono font-bold">{column.stats.min}</span></span>
+              <span>Min: <span className="text-slate-300 font-mono font-bold">{typeof column.stats.min === 'number' ? column.stats.min.toLocaleString('en-IN') : column.stats.min}</span></span>
             )}
             {column.stats?.avg !== undefined && (
-              <span>Avg: <span className="text-brand-cyan font-mono font-bold">{column.stats.avg}</span></span>
+              <span>Avg: <span className="text-brand-cyan font-mono font-bold">{typeof column.stats.avg === 'number' ? column.stats.avg.toLocaleString('en-IN') : column.stats.avg}</span></span>
             )}
             {column.stats?.max !== undefined && (
-              <span>Max: <span className="text-slate-300 font-mono font-bold">{column.stats.max}</span></span>
+              <span>Max: <span className="text-slate-300 font-mono font-bold">{typeof column.stats.max === 'number' ? column.stats.max.toLocaleString('en-IN') : column.stats.max}</span></span>
             )}
           </div>
         )}
+
 
         {/* Sample Values */}
         {column.sampleValues && column.sampleValues.length > 0 && (
