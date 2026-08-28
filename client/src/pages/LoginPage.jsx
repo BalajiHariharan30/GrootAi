@@ -388,10 +388,15 @@ export const LoginPage = () => {
           </div>
         </div>
 
-        {/* Bottom tagline */}
-        <p className="text-center text-[11px] text-slate-600 mt-4">
-          GrootAi · Zero Unsupervised Data Mutations · MCP Protocol
-        </p>
+        {/* Bottom tagline & Copyright */}
+        <div className="text-center space-y-1 mt-4">
+          <p className="text-[11px] text-slate-500 font-medium">
+            © {new Date().getFullYear()} GrootAi · All rights Reserved by Balaji H
+          </p>
+          <p className="text-[10px] text-slate-600">
+            Zero Unsupervised Data Mutations · Execute-Before-Trust™ · MCP Protocol
+          </p>
+        </div>
       </motion.div>
     </div>
   );

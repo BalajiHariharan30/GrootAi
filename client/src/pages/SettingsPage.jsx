@@ -180,24 +180,39 @@ export const SettingsPage = () => {
           </div>
         </div>
 
-        {/* Platform Identity Banner */}
+        {/* Platform Identity & Creator Banner */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
           className="glass-panel p-5 rounded-2xl border border-brand-500/20 bg-brand-500/5
-                     flex items-center space-x-4"
+                     flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-indigo to-brand-500 flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-white" />
+          <div className="flex items-center space-x-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-indigo to-brand-500 flex items-center justify-center shrink-0 shadow-glow-indigo">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white">GrootAi — Autonomous Agentic Data Quality Platform</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Zero Unsupervised Mutations · Human-in-the-Loop HITL · Execute-Before-Trust™
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-bold text-white">GrootAi — Autonomous Agentic Data Quality Platform</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Zero Unsupervised Mutations · Human-in-the-Loop HITL · Execute-Before-Trust™
-            </p>
+
+          <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+            <span className="px-3 py-1 rounded-xl text-xs font-bold bg-brand-indigo/20 text-brand-indigo border border-brand-indigo/30">
+              Done by Balaji H
+            </span>
           </div>
         </motion.div>
+
+        {/* Footer Attribution */}
+        <div className="text-center pt-2">
+          <p className="text-[11px] text-slate-500 font-medium">
+            © {new Date().getFullYear()} GrootAi · All rights Reserved by Balaji H
+          </p>
+        </div>
 
       </div>
     </PageTransition>
