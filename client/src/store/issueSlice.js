@@ -1,66 +1,39 @@
-/**
- * @module issueSlice
- * @description Redux slice for Issue triage, pagination, explanation, and dismissal.
- * All fetch() calls include Authorization header from stored JWT.
- */
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { authHeaders }                    from './authSlice.js';
+import { apiGet, apiFetch }               from './api.js';
 
 export const fetchIssues = createAsyncThunk(
   'issues/fetch',
   async ({ datasetId, cursor, severity, type, status }, { rejectWithValue }) => {
-    try {
-      const params = new URLSearchParams();
-      if (cursor)                    params.append('cursor',   cursor);
-      if (severity && severity !== 'all') params.append('severity', severity);
-      if (type     && type     !== 'all') params.append('type',     type);
-      if (status)                    params.append('status',   status);
-
-      const res = await fetch(`/api/issues/dataset/${datasetId}?${params.toString()}`, {
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const params = new URLSearchParams();
+    if (cursor)                        params.append('cursor',   cursor);
+    if (severity && severity !== 'all') params.append('severity', severity);
+    if (type     && type     !== 'all') params.append('type',     type);
+    if (status)                        params.append('status',   status);
+    const { ok, data } = await apiGet(`/api/issues/dataset/${datasetId}?${params.toString()}`);
+    if (!ok) return rejectWithValue(data?.error ?? 'Failed to load issues');
+    return data;
   },
 );
 
 export const fetchMatchExplanation = createAsyncThunk(
   'issues/fetchExplanation',
   async (issueId, { rejectWithValue }) => {
-    try {
-      const res = await fetch(`/api/issues/${issueId}/explain`, {
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiGet(`/api/issues/${issueId}/explain`);
+    if (!ok) return rejectWithValue(data?.error ?? 'Explanation fetch failed');
+    return data?.data;
   },
 );
 
 export const dismissIssue = createAsyncThunk(
   'issues/dismiss',
   async ({ issueId, datasetId }, { dispatch, rejectWithValue }) => {
-    try {
-      const res = await fetch(`/api/issues/${issueId}/dismiss`, {
-        method:      'POST',
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      dispatch(fetchIssues({ datasetId }));
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiFetch(`/api/issues/${issueId}/dismiss`, { method: 'POST' });
+    if (!ok) return rejectWithValue(data?.error ?? 'Dismiss failed');
+    dispatch(fetchIssues({ datasetId }));
+    return data;
   },
 );
+
 
 const issueSlice = createSlice({
   name: 'issues',

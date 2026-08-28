@@ -11,135 +11,51 @@
  *  error           → error message string | null
  */
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { apiGet, apiPost, apiFetch, storeToken, clearToken, getStoredToken } from './api.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const TOKEN_KEY = 'grootai_jwt';
-
-/** Returns stored JWT from localStorage */
-export const getStoredToken = () => localStorage.getItem(TOKEN_KEY);
-
-/** Persists JWT to localStorage */
-export const storeToken = (token) => localStorage.setItem(TOKEN_KEY, token);
-
-/** Removes JWT from localStorage */
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
-
-/**
- * Builds Authorization header object for fetch() calls.
- * Returns empty object if no token is available (guest mode).
- * @returns {Record<string, string>}
- */
+export { getStoredToken, storeToken, clearToken };
 export const authHeaders = () => {
-  const token = getStoredToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const t = getStoredToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
 };
 
-// ---------------------------------------------------------------------------
-// Thunks
-// ---------------------------------------------------------------------------
-
-/**
- * Called on app boot — fetches the current user from the server using
- * the stored JWT. If the token is missing or expired, user remains unauthenticated.
- */
 export const fetchCurrentUser = createAsyncThunk(
   'auth/fetchCurrentUser',
   async (_, { rejectWithValue }) => {
     const token = getStoredToken();
     if (!token) return rejectWithValue('no_token');
-
-    try {
-      const res = await fetch('/api/auth/me', {
-        headers:     { Authorization: `Bearer ${token}` },
-        credentials: 'include',
-      });
-
-      if (res.status === 401) {
-        clearToken();
-        return rejectWithValue('token_expired');
-      }
-
-      const data = await res.json();
-      if (!data.success) return rejectWithValue(data.error);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, status, data } = await apiGet('/api/auth/me');
+    if (status === 401) { clearToken(); return rejectWithValue('token_expired'); }
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Auth failed');
+    return data.data;
   },
 );
 
-/**
- * Authenticates an existing user with Email and Password.
- */
 export const loginWithEmail = createAsyncThunk(
   'auth/loginWithEmail',
   async ({ email, password }, { rejectWithValue }) => {
-    try {
-      const res = await fetch('/api/auth/login', {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body:        JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-      if (!data.success) {
-        return rejectWithValue(data.error || 'Login failed. Please check your credentials.');
-      }
-
-      if (data.token) storeToken(data.token);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiPost('/api/auth/login', { email, password });
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Login failed. Please check your credentials.');
+    if (data.token) storeToken(data.token);
+    return data.data;
   },
 );
 
-/**
- * Registers a new user with Name, Email, and Password.
- */
 export const registerWithEmail = createAsyncThunk(
   'auth/registerWithEmail',
   async ({ name, email, password }, { rejectWithValue }) => {
-    try {
-      const res = await fetch('/api/auth/register', {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body:        JSON.stringify({ name, email, password }),
-      });
-
-      const data = await res.json();
-      if (!data.success) {
-        return rejectWithValue(data.error || 'Registration failed. Please try again.');
-      }
-
-      if (data.token) storeToken(data.token);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiPost('/api/auth/register', { name, email, password });
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Registration failed. Please try again.');
+    if (data.token) storeToken(data.token);
+    return data.data;
   },
 );
 
-/**
- * Clears local token and calls /api/auth/logout to clear the server cookie.
- */
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',
-  async (_, { rejectWithValue }) => {
-    try {
-      clearToken();
-      await fetch('/api/auth/logout', {
-        method:      'POST',
-        credentials: 'include',
-      });
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+  async () => {
+    clearToken();
+    await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
   },
 );
 

@@ -1,75 +1,39 @@
-/**
- * @module ruleSlice
- * @description Redux slice for NL Rule lifecycle management.
- * All fetch() calls include Authorization header from stored JWT.
- */
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { authHeaders }                    from './authSlice.js';
+import { apiGet, apiPost, apiFetch }      from './api.js';
 
 export const parseNLRule = createAsyncThunk(
   'rules/parseNL',
   async ({ naturalLanguageInput, datasetId }, { rejectWithValue }) => {
-    try {
-      const res = await fetch('/api/rules/parse', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        credentials: 'include',
-        body:    JSON.stringify({ naturalLanguageInput, datasetId }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiPost('/api/rules/parse', { naturalLanguageInput, datasetId });
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Parse failed');
+    return data.data;
   },
 );
 
 export const fetchRulesForDataset = createAsyncThunk(
   'rules/fetchForDataset',
   async (datasetId, { rejectWithValue }) => {
-    try {
-      const res = await fetch(`/api/rules/dataset/${datasetId}`, {
-        headers: authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      return data.data || [];
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiGet(`/api/rules/dataset/${datasetId}`);
+    if (!ok) return rejectWithValue(data?.error ?? 'Failed to load rules');
+    return data?.data || [];
   },
 );
 
 export const saveAndActivateRule = createAsyncThunk(
   'rules/saveAndActivate',
   async (rulePayload, { dispatch, rejectWithValue }) => {
-    try {
-      // 1. Save rule
-      const saveRes = await fetch('/api/rules', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        credentials: 'include',
-        body:    JSON.stringify(rulePayload),
-      });
-      const saved = await saveRes.json();
-      if (!saved.success) throw new Error(saved.error);
+    // 1. Save rule
+    const { ok: saveOk, data: saved } = await apiPost('/api/rules', rulePayload);
+    if (!saveOk || !saved?.success) return rejectWithValue(saved?.error ?? 'Save failed');
 
-      // 2. Activate rule (human confirmation gate)
-      const actRes = await fetch(`/api/rules/${saved.data._id}/activate`, {
-        method:  'POST',
-        headers: authHeaders(),
-        credentials: 'include',
-      });
-      const actData = await actRes.json();
+    // 2. Activate rule (human confirmation gate)
+    const { data: actData } = await apiFetch(`/api/rules/${saved.data._id}/activate`, { method: 'POST' });
 
-      dispatch(fetchRulesForDataset(rulePayload.datasetId));
-      return actData;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    dispatch(fetchRulesForDataset(rulePayload.datasetId));
+    return actData;
   },
 );
+
 
 const ruleSlice = createSlice({
   name: 'rules',

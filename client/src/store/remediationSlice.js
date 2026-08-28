@@ -1,168 +1,85 @@
-/**
- * @module remediationSlice
- * @description Redux slice for HITL remediation queue and audit log.
- * All fetch() calls include Authorization header from stored JWT.
- * Approvals also pass the authenticated user's name from Redux state.
- */
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { authHeaders }                    from './authSlice.js';
+import { apiGet, apiPost, apiFetch }      from './api.js';
 
 export const fetchPendingRemediations = createAsyncThunk(
   'remediation/fetchPending',
   async (_, { rejectWithValue }) => {
-    try {
-      const res = await fetch('/api/remediation/pending', {
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      return data.data || [];
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiGet('/api/remediation/pending');
+    if (!ok) return rejectWithValue(data?.error ?? 'Failed to load queue');
+    return data?.data || [];
   },
 );
 
 export const fetchAuditLog = createAsyncThunk(
   'remediation/fetchAuditLog',
   async (_, { rejectWithValue }) => {
-    try {
-      const res = await fetch('/api/remediation/audit-log', {
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      return data.data || [];
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiGet('/api/remediation/audit-log');
+    if (!ok) return rejectWithValue(data?.error ?? 'Failed to load audit log');
+    return data?.data || [];
   },
 );
 
 export const proposeRemediation = createAsyncThunk(
   'remediation/propose',
   async (issueId, { dispatch, rejectWithValue }) => {
-    try {
-      const res = await fetch(`/api/remediation/propose/${issueId}`, {
-        method:      'POST',
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      dispatch(fetchPendingRemediations());
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiFetch(`/api/remediation/propose/${issueId}`, { method: 'POST' });
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Propose failed');
+    dispatch(fetchPendingRemediations());
+    return data.data;
   },
 );
 
 export const approveRemediation = createAsyncThunk(
   'remediation/approve',
   async ({ remediationId, approver }, { dispatch, getState, rejectWithValue }) => {
-    try {
-      // Use authenticated user's real name from Redux state if available
-      const authUser   = getState().auth?.user;
-      const actorName  = authUser
-        ? `${authUser.name} <${authUser.email}>`
-        : (approver ?? 'Human Data Steward');
-
-      const res = await fetch(`/api/remediation/${remediationId}/approve`, {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json', ...authHeaders() },
-        credentials: 'include',
-        body:        JSON.stringify({ approver: actorName }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      dispatch(fetchPendingRemediations());
-      dispatch(fetchAuditLog());
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const authUser  = getState().auth?.user;
+    const actorName = authUser ? `${authUser.name} <${authUser.email}>` : (approver ?? 'Human Data Steward');
+    const { ok, data } = await apiPost(`/api/remediation/${remediationId}/approve`, { approver: actorName });
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Approve failed');
+    dispatch(fetchPendingRemediations());
+    dispatch(fetchAuditLog());
+    return data;
   },
 );
 
 export const rejectRemediation = createAsyncThunk(
   'remediation/reject',
   async ({ remediationId, reason }, { dispatch, rejectWithValue }) => {
-    try {
-      const res = await fetch(`/api/remediation/${remediationId}/reject`, {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json', ...authHeaders() },
-        credentials: 'include',
-        body:        JSON.stringify({ reason }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      dispatch(fetchPendingRemediations());
-      dispatch(fetchAuditLog());
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiPost(`/api/remediation/${remediationId}/reject`, { reason });
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Reject failed');
+    dispatch(fetchPendingRemediations());
+    dispatch(fetchAuditLog());
+    return data;
   },
 );
 
 export const rollbackRemediation = createAsyncThunk(
   'remediation/rollback',
   async ({ remediationId, rolledBackBy, reason }, { dispatch, getState, rejectWithValue }) => {
-    try {
-      const authUser  = getState().auth?.user;
-      const actor     = authUser ? `${authUser.name} <${authUser.email}>` : (rolledBackBy ?? 'Human Data Steward');
-
-      const res = await fetch(`/api/remediation/${remediationId}/rollback`, {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json', ...authHeaders() },
-        credentials: 'include',
-        body:        JSON.stringify({ rolledBackBy: actor, reason }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      dispatch(fetchAuditLog());
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const authUser = getState().auth?.user;
+    const actor    = authUser ? `${authUser.name} <${authUser.email}>` : (rolledBackBy ?? 'Human Data Steward');
+    const { ok, data } = await apiPost(`/api/remediation/${remediationId}/rollback`, { rolledBackBy: actor, reason });
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Rollback failed');
+    dispatch(fetchAuditLog());
+    return data;
   },
 );
 
 export const fetchExplanation = createAsyncThunk(
   'remediation/explain',
   async (remediationId, { rejectWithValue }) => {
-    try {
-      const res = await fetch(`/api/remediation/${remediationId}/explain`, {
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiGet(`/api/remediation/${remediationId}/explain`);
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Explanation failed');
+    return data.data;
   },
 );
 
 export const fetchLearningStats = createAsyncThunk(
   'remediation/learningStats',
   async (_, { rejectWithValue }) => {
-    try {
-      const res = await fetch('/api/remediation/learning/stats', {
-        headers:     authHeaders(),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      return data.data;
-    } catch (err) {
-      return rejectWithValue(err.message);
-    }
+    const { ok, data } = await apiGet('/api/remediation/learning/stats');
+    if (!ok || !data?.success) return rejectWithValue(data?.error ?? 'Stats fetch failed');
+    return data.data;
   },
 );
 
