@@ -56,15 +56,28 @@ const IssueCard = memo(({
   const isDuplicate = issue.type === 'duplicate';
   const SevIcon     = SEVERITY_ICON[issue.severity] ?? Info;
 
+  // Confidence Calculation for Auto-Triage
+  const rawConfidence = issue.matchConfidence ?? (
+    issue.type === 'format_error' ? 0.96 :
+    issue.type === 'null_defect'  ? 0.92 :
+    issue.type === 'violation'    ? 0.90 :
+    issue.type === 'outlier'      ? 0.65 : 0.85
+  );
+  const confPct = Math.round(rawConfidence * 100);
+  const isHighConfidence = confPct >= 95;
+  const isLowConfidence  = confPct < 70;
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0  }}
       exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
-      className="glass-panel p-4 rounded-xl border border-slate-800
-                 hover:border-slate-700/80 transition-all
-                 flex flex-col md:flex-row md:items-center justify-between gap-4"
+      className={`glass-panel p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+        isHighConfidence ? 'border-brand-500/30 hover:border-brand-500/60 bg-brand-500/[0.02]' :
+        isLowConfidence  ? 'border-amber-500/30 hover:border-amber-500/60' :
+        'border-slate-800 hover:border-slate-700/80'
+      }`}
     >
       {/* Details */}
       <div className="space-y-1.5 flex-1 min-w-0">
@@ -77,6 +90,17 @@ const IssueCard = memo(({
           <span className="font-bold text-xs text-white">Record #{issue.rowNumber}</span>
           <StatusBadge label={issue.severity} variant={issue.severity} />
           <StatusBadge label={issue.type.replace('_', ' ')} variant="neutral" />
+
+          {/* Auto-Triage Confidence Badge */}
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center space-x-1 ${
+            isHighConfidence ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
+            isLowConfidence  ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30' :
+            'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
+          }`}>
+            <Sparkles className="w-2.5 h-2.5 mr-1 inline" />
+            <span>{confPct}% {isHighConfidence ? '⚡ Auto-Triage' : isLowConfidence ? '🔍 Review' : '🎯 Moderate'}</span>
+          </span>
+
           {issue.field && (
             <code className="text-[11px] text-brand-cyan">[{issue.field}]</code>
           )}
@@ -117,13 +141,14 @@ const IssueCard = memo(({
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.96 }}
           onClick={() => onProposeFix(issue._id)}
-          className="px-3.5 py-1.5 rounded-lg text-xs font-bold
-                     bg-gradient-to-r from-brand-cyan to-brand-500
-                     text-slate-950 shadow-glow-cyan transition-all
-                     flex items-center space-x-1"
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 ${
+            isHighConfidence
+              ? 'bg-gradient-to-r from-emerald-400 to-brand-500 text-slate-950 shadow-glow-emerald'
+              : 'bg-gradient-to-r from-brand-cyan to-brand-500 text-slate-950 shadow-glow-cyan'
+          }`}
         >
           <Cpu className="w-3.5 h-3.5" />
-          <span>Propose Fix</span>
+          <span>{isHighConfidence ? '⚡ 1-Click Fix' : 'Propose Fix'}</span>
         </motion.button>
 
         <button

@@ -137,3 +137,18 @@ Open **`http://localhost:5173`** in your browser.
 | `explain_match` | `{ recordIdA, recordIdB }` | Computes field-by-field similarity breakdown. |
 | `propose_fix` | `{ issueId }` | Proposes a remediation patch for human review. |
 | `get_dataset_profile` | `{ datasetId }` | Returns column statistics and quality scores. |
+
+---
+
+## 8. Known Limitations & Production Roadmap
+
+Engineering transparency is a core design principle of GrootAi. The current architecture addresses core agentic data observability with known boundary conditions scheduled for future milestones:
+
+| Area | Current Behavior (MVP / v1.0) | Production Roadmap (Target) |
+|---|---|---|
+| **Data Ingestion** | CSV uploads capped at 50,000 rows with memory-backed stream parsing. | Native asynchronous worker queue (BullMQ/Celery) + streaming connectors for Snowflake, PostgreSQL, BigQuery, and S3. |
+| **PII & Privacy** | Dynamic regex masking (`j***e@company.com`, `***-***-3210`) in-flight before Claude API calls. | AES-256 field-level encryption at rest + local open-weights LLM sidecar deployment (Ollama/vLLM) for zero third-party data egress. |
+| **Storage Persistence** | Dual-mode: Production MongoDB + zero-dependency In-Memory fallback with UI notice banner. | Enterprise multi-tenant relational schemas with time-series history tracking and automated cold-storage archiving. |
+| **Fuzzy Matching** | Tunable deterministic Jaro-Winkler, Levenshtein, and exact multi-field weights. | Adaptive active learning from steward approval/rejection signals to auto-tune similarity thresholds per organization. |
+| **Alerting** | In-app notification badges and WebSocket toast streaming. | External webhook dispatchers for Slack, Microsoft Teams, and PagerDuty incident management. |
+

@@ -307,16 +307,45 @@ router.post(
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
 
+    const MAX_CSV_ROWS = 50000;
     const results = [];
-    const stream  = Readable.from(req.file.buffer.toString());
 
-    await new Promise((resolve, reject) => {
-      stream
-        .pipe(csvParser())
-        .on('data',  (data) => results.push(data))
-        .on('end',   resolve)
-        .on('error', reject);
-    });
+    try {
+      const content = req.file.buffer.toString('utf-8');
+      // Basic check for empty or non-text files
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ success: false, error: 'Uploaded file is empty.' });
+      }
+
+      const stream = Readable.from(content);
+
+      await new Promise((resolve, reject) => {
+        let rowCount = 0;
+        stream
+          .pipe(csvParser({ strict: false, skipComments: true }))
+          .on('data', (data) => {
+            rowCount++;
+            if (rowCount <= MAX_CSV_ROWS) {
+              results.push(data);
+            }
+          })
+          .on('end', resolve)
+          .on('error', (err) => reject(new Error(`CSV Parse Error: Malformed format or unsupported encoding. ${err.message}`)));
+      });
+    } catch (parseErr) {
+      logger.warn({ event: 'csv_parse_error', error: parseErr.message });
+      return res.status(400).json({
+        success: false,
+        error: parseErr.message || 'Failed to parse CSV file. Please ensure valid UTF-8 encoding and standard comma/delimiter format.',
+      });
+    }
+
+    if (results.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid data rows found in CSV. Please verify column headers and row contents.',
+      });
+    }
 
     const datasetName = req.body.name || req.file.originalname.replace(/\.[^/.]+$/, '');
     const datasetId   = store.generateId();

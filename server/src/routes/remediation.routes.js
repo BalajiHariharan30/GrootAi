@@ -83,6 +83,65 @@ router.post(
   }),
 );
 
+// ── POST /api/remediation/propose-batch ──────────────────────────────────
+/**
+ * Generates AI remediation proposals in batch (up to 50 items) for flagged issues.
+ */
+router.post(
+  '/propose-batch',
+  validate([body('issueIds').isArray({ min: 1, max: 50 }).withMessage('issueIds must be an array between 1 and 50 items')]),
+  asyncHandler(async (req, res) => {
+    const { issueIds } = req.body;
+    const items = [];
+
+    for (const issueId of issueIds) {
+      let issue = null;
+      let record = null;
+      if (getDBStatus()) {
+        issue = await Issue.findById(issueId).lean();
+        if (issue) record = await Record.findById(issue.recordId).lean();
+      } else {
+        issue = store.issues.find((i) => String(i._id) === String(issueId));
+        if (issue) record = store.records.find((r) => String(r._id) === String(issue.recordId));
+      }
+      if (issue) {
+        items.push({ issue, record: record ?? { data: { [issue.field]: issue.currentValue } } });
+      }
+    }
+
+    if (items.length === 0) {
+      return res.status(404).json({ success: false, error: 'No matching issues found for batch propose.' });
+    }
+
+    const proposals = await RemediationService.proposeBatchFixes(items);
+    const createdProposals = [];
+
+    for (const proposal of proposals) {
+      if (getDBStatus()) {
+        const doc = await RemediationAction.create(proposal);
+        await Issue.findByIdAndUpdate(proposal.issueId, {
+          hasRemediationProposal: true,
+          remediationActionId: doc._id,
+        });
+        createdProposals.push(doc);
+      } else {
+        proposal._id = store.generateId();
+        proposal.createdAt = new Date();
+        store.remediations.push(proposal);
+        const iss = store.issues.find((i) => String(i._id) === String(proposal.issueId));
+        if (iss) {
+          iss.hasRemediationProposal = true;
+          iss.remediationActionId = proposal._id;
+        }
+        createdProposals.push(proposal);
+      }
+    }
+
+    logger.info({ event: 'batch_remediation_proposed', count: createdProposals.length });
+    res.status(201).json({ success: true, data: createdProposals, count: createdProposals.length });
+  }),
+);
+
 // ── GET /api/remediation/pending ─────────────────────────────────────────
 /** Returns all remediation proposals that are still awaiting human review. */
 router.get(

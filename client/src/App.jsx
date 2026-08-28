@@ -72,14 +72,21 @@ function AppShell() {
   const [activeTab,    setActiveTab]    = useState('dashboard');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isConnected,  setIsConnected]  = useState(false);
+  const [serverHealth, setServerHealth] = useState(null);
 
   const { pendingList } = useSelector((s) => s.remediation);
 
-  // Bootstrap data
+  // Bootstrap data & health check
   useEffect(() => {
     dispatch(fetchDatasets());
     dispatch(fetchPendingRemediations());
+
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => setServerHealth(data))
+      .catch(() => {});
   }, [dispatch]);
+
 
   // Socket.io
   useEffect(() => {
@@ -126,6 +133,23 @@ function AppShell() {
         setActiveTab={setActiveTab}
         onOpenUpload={() => setIsUploadOpen(true)}
       />
+
+      {/* In-Memory Demo Mode Notice Banner */}
+      {serverHealth?.isDemoMode && (
+        <div className="bg-slate-900/90 border-b border-indigo-500/30 px-4 py-1.5 text-[11px] text-slate-300 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold text-[10px] border border-indigo-500/40">
+                IN-MEMORY MODE
+              </span>
+              <span>
+                Operating in zero-dependency in-memory mode. Data mutations are preserved in process memory and reset upon server restart.
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-mono">Connect MONGODB_URI for persistence</span>
+          </div>
+        </div>
+      )}
 
       {/* HITL Notification Ribbon */}
       <AnimatePresence>

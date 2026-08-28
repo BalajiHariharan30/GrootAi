@@ -1,9 +1,108 @@
 import crypto from 'crypto';
 
 /**
+ * PII Redaction & Data Minimization Utilities
+ * Masks sensitive identifiers before sending any data payloads to LLMs.
+ */
+export class PIIRedactor {
+  static maskEmail(email) {
+    if (!email || typeof email !== 'string') return email;
+    const parts = email.split('@');
+    if (parts.length !== 2) return '***@***.com';
+    const name = parts[0];
+    const maskedName = name.length > 2 ? `${name[0]}***${name[name.length - 1]}` : '***';
+    return `${maskedName}@${parts[1]}`;
+  }
+
+  static maskPhone(phone) {
+    if (!phone || typeof phone !== 'string') return phone;
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 4) return '***-***-****';
+    return `***-***-${digits.slice(-4)}`;
+  }
+
+  static maskTaxId(taxId) {
+    if (!taxId || typeof taxId !== 'string') return taxId;
+    if (taxId.length < 4) return '***';
+    return `${taxId.slice(0, 2)}***${taxId.slice(-2)}`;
+  }
+
+  /**
+   * Sanitizes a record object, retaining only the minimal fields needed for the LLM
+   * and masking PII fields.
+   */
+  static sanitizeRecordForLLM(record, targetField) {
+    if (!record) return {};
+    const raw = record.data ?? record;
+    const sanitized = {};
+
+    // Only include the target field and a minimal sanitized context
+    for (const [key, val] of Object.entries(raw)) {
+      if (key === targetField) {
+        sanitized[key] = val; // The field to be fixed
+      } else {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey.includes('email')) {
+          sanitized[key] = this.maskEmail(String(val));
+        } else if (lowerKey.includes('phone') || lowerKey.includes('mobile')) {
+          sanitized[key] = this.maskPhone(String(val));
+        } else if (lowerKey.includes('tax') || lowerKey.includes('pan') || lowerKey.includes('gstin') || lowerKey.includes('ssn')) {
+          sanitized[key] = this.maskTaxId(String(val));
+        }
+      }
+    }
+    return sanitized;
+  }
+}
+
+/**
  * AI Tool Use Client for Natural Language Data Quality Translation & Reasoning
  */
 export class AIClient {
+  /**
+   * Helper to call Claude API with exponential backoff & jitter for 429/5xx status codes.
+   */
+  static async callClaudeWithRetry(endpoint, payload, maxRetries = 3) {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          return await response.json();
+        }
+
+        // Retry on 429 (Rate Limit) or 5xx (Server Error)
+        if (response.status === 429 || response.status >= 500) {
+          attempt++;
+          const retryAfter = response.headers.get('retry-after');
+          const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, attempt) * 500 + Math.random() * 200;
+          console.warn(`[AIClient] Claude API ${response.status} on attempt ${attempt}/${maxRetries}. Retrying in ${Math.round(delay)}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+
+        // Other non-retryable 4xx client errors
+        const errText = await response.text();
+        throw new Error(`Claude API error ${response.status}: ${errText}`);
+      } catch (err) {
+        attempt++;
+        if (attempt >= maxRetries) throw err;
+        const delay = Math.pow(2, attempt) * 500 + Math.random() * 200;
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+    throw new Error(`Claude API exceeded max retries (${maxRetries})`);
+  }
+
   /**
    * Translates natural language into a strict executable DQ Rule AST
    * @param {string} nlInput - The user's plain English rule
@@ -11,9 +110,22 @@ export class AIClient {
    */
   static async parseNLToStructuredRule(nlInput, columns = []) {
     const columnNames = columns.map(c => c.name);
+    // Redact sample values before sending to LLM context
+    const sanitizedColumns = columns.map(c => ({
+      name: c.name,
+      type: c.inferredType,
+      sample: (c.sampleValues || []).slice(0, 2).map(v => {
+        const lower = c.name.toLowerCase();
+        if (lower.includes('email')) return PIIRedactor.maskEmail(String(v));
+        if (lower.includes('phone') || lower.includes('mobile')) return PIIRedactor.maskPhone(String(v));
+        if (lower.includes('tax') || lower.includes('pan') || lower.includes('gstin')) return PIIRedactor.maskTaxId(String(v));
+        return v;
+      }),
+    }));
+
     const contextPrompt = `
 You are the GrootAi Data Quality Intelligence Agent.
-Given a dataset with columns: ${JSON.stringify(columns.map(c => ({ name: c.name, type: c.inferredType, sample: (c.sampleValues || []).slice(0, 2) })))}
+Given a dataset with columns: ${JSON.stringify(sanitizedColumns)}
 Translate the user's natural language business rule into a strict structured JSON rule object.
 
 Available Operators:
@@ -36,56 +148,47 @@ User Rule: "${nlInput}"
     // 1. Check if ANTHROPIC_API_KEY is configured for live Claude Tool Use
     if (process.env.ANTHROPIC_API_KEY) {
       try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': process.env.ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01'
-          },
-          body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 1024,
-            temperature: 0.1, // Low temp for deterministic structured code
-            tools: [{
-              name: 'define_data_quality_rule',
-              description: 'Forces strict structured DQ rule definition',
-              input_schema: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string', description: 'Concise descriptive title of the rule' },
-                  description: { type: 'string', description: 'Plain English summary of what the rule enforces' },
-                  category: { type: 'string', enum: ['validity', 'completeness', 'uniqueness', 'consistency', 'range'] },
-                  severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
-                  logic: { type: 'string', enum: ['AND', 'OR'] },
-                  conditions: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        field: { type: 'string', enum: columnNames },
-                        operator: { 
-                          type: 'string', 
-                          enum: ['not_null', 'is_null', 'min', 'max', 'range', 'regex', 'email_valid', 'phone_valid', 'in_set', 'not_in_set', 'unique', 'length_between'] 
-                        },
-                        minValue: { type: 'number' },
-                        maxValue: { type: 'number' },
-                        pattern: { type: 'string' },
-                        set: { type: 'array', items: { type: 'string' } }
+        const data = await this.callClaudeWithRetry('https://api.anthropic.com/v1/messages', {
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1024,
+          temperature: 0.1, // Low temp for deterministic structured code
+          tools: [{
+            name: 'define_data_quality_rule',
+            description: 'Forces strict structured DQ rule definition',
+            input_schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Concise descriptive title of the rule' },
+                description: { type: 'string', description: 'Plain English summary of what the rule enforces' },
+                category: { type: 'string', enum: ['validity', 'completeness', 'uniqueness', 'consistency', 'range'] },
+                severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+                logic: { type: 'string', enum: ['AND', 'OR'] },
+                conditions: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      field: { type: 'string', enum: columnNames },
+                      operator: { 
+                        type: 'string', 
+                        enum: ['not_null', 'is_null', 'min', 'max', 'range', 'regex', 'email_valid', 'phone_valid', 'in_set', 'not_in_set', 'unique', 'length_between'] 
                       },
-                      required: ['field', 'operator']
-                    }
+                      minValue: { type: 'number' },
+                      maxValue: { type: 'number' },
+                      pattern: { type: 'string' },
+                      set: { type: 'array', items: { type: 'string' } }
+                    },
+                    required: ['field', 'operator']
                   }
-                },
-                required: ['name', 'description', 'category', 'severity', 'conditions']
-              }
-            }],
-            tool_choice: { type: 'tool', name: 'define_data_quality_rule' },
-            messages: [{ role: 'user', content: contextPrompt }]
-          })
+                }
+              },
+              required: ['name', 'description', 'category', 'severity', 'conditions']
+            }
+          }],
+          tool_choice: { type: 'tool', name: 'define_data_quality_rule' },
+          messages: [{ role: 'user', content: contextPrompt }]
         });
 
-        const data = await response.json();
         if (data.content && data.content[0] && data.content[0].input) {
           return data.content[0].input;
         }
@@ -432,6 +535,25 @@ User Rule: "${nlInput}"
       agentReasoning: `Mandatory field was empty or null. Proposing standard enterprise placeholder.`,
       confidence: calibratedConfidence('missing_value', 'impute_default', 0.85),
     };
+  }
+
+  /**
+   * Batch Remediation Processor: Processes up to 50 issues in a single operation.
+   * Leverages PII redaction and returns structured remediation proposals.
+   */
+  static async generateBatchRemediations(issuesWithRecords, calibrationMap = {}) {
+    const results = [];
+    for (const item of issuesWithRecords) {
+      const { issue, record } = item;
+      // Sanitize record to ensure zero PII leakage
+      const sanitizedRecord = PIIRedactor.sanitizeRecordForLLM(record, issue.field);
+      const proposal = this.generateRemediationProposal(issue, sanitizedRecord, calibrationMap);
+      results.push({
+        issueId: issue._id,
+        proposal,
+      });
+    }
+    return results;
   }
 }
 

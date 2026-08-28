@@ -67,16 +67,26 @@ app.use(requestLogger);
 // ── Rate Limiting ─────────────────────────────────────────────────────────
 app.use('/api/', apiLimiter);
 
+import { getDBStatus } from './config/db.js';
+import { cache }       from './cache/redisClient.js';
+
 // ── Health (public) ───────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
+  const isMongo = getDBStatus();
+  const isRedis = cache.isRedisConnected;
+
   res.json({
-    status:    'healthy',
-    platform:  'GrootAi',
-    version:   process.env.npm_package_version ?? '1.0.0',
-    env:       process.env.NODE_ENV ?? 'development',
-    timestamp: new Date().toISOString(),
+    status:      'healthy',
+    platform:    'GrootAi',
+    version:     process.env.npm_package_version ?? '1.0.0',
+    env:         process.env.NODE_ENV ?? 'development',
+    storageMode: isMongo ? 'mongodb' : 'in-memory',
+    cacheMode:   isRedis ? 'redis' : 'in-memory',
+    isDemoMode:  !isMongo,
+    timestamp:   new Date().toISOString(),
   });
 });
+
 
 // ── Auth Routes (public — no JWT required) ────────────────────────────────
 app.use('/api/auth', authRoutes);
