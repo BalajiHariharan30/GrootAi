@@ -74,11 +74,11 @@ import { cache }       from './cache/redisClient.js';
 app.get('/api/health', (_req, res) => {
   const isMongo = getDBStatus();
   const isRedis = cache.isRedisConnected;
-
   res.json({
     status:      'healthy',
     platform:    'GrootAi',
     version:     process.env.npm_package_version ?? '1.0.0',
+    apiVersion:  'v1',
     env:         process.env.NODE_ENV ?? 'development',
     storageMode: isMongo ? 'mongodb' : 'in-memory',
     cacheMode:   isRedis ? 'redis' : 'in-memory',
@@ -86,21 +86,29 @@ app.get('/api/health', (_req, res) => {
     timestamp:   new Date().toISOString(),
   });
 });
+// Versioned alias
+app.get('/api/v1/health', (_req, res) => res.redirect(307, '/api/health'));
 
-
-// ── Auth Routes (public — no JWT required) ────────────────────────────────
-app.use('/api/auth', authRoutes);
+// ── Auth Routes (public) ───────────────────────────────────────────────────
+app.use('/api/auth',    authRoutes);
+app.use('/api/v1/auth', authRoutes);
 
 // ── Protected Domain Routes ───────────────────────────────────────────────
-// requireAuth({ allowGuest: true }) → guests get read-only access
-// requireAuth()                     → only signed-in users
-app.use('/api/datasets',    requireAuth({ allowGuest: true }), datasetRoutes);
-app.use('/api/rules',       requireAuth({ allowGuest: true }), ruleRoutes);
-app.use('/api/issues',      requireAuth({ allowGuest: true }), issueRoutes);
-app.use('/api/remediation', requireAuth({ allowGuest: true }), remediationRoutes);
-app.use('/api/eval',        requireAuth({ allowGuest: true }), evalRoutes);
+// Both /api/ (legacy) and /api/v1/ (current) are supported for compatibility
+app.use('/api/datasets',       requireAuth({ allowGuest: true }), datasetRoutes);
+app.use('/api/rules',          requireAuth({ allowGuest: true }), ruleRoutes);
+app.use('/api/issues',         requireAuth({ allowGuest: true }), issueRoutes);
+app.use('/api/remediation',    requireAuth({ allowGuest: true }), remediationRoutes);
+app.use('/api/eval',           requireAuth({ allowGuest: true }), evalRoutes);
 
-// ── Model Context Protocol (public — API-key auth handled externally) ─────
+// Versioned aliases — /api/v1/
+app.use('/api/v1/datasets',    requireAuth({ allowGuest: true }), datasetRoutes);
+app.use('/api/v1/rules',       requireAuth({ allowGuest: true }), ruleRoutes);
+app.use('/api/v1/issues',      requireAuth({ allowGuest: true }), issueRoutes);
+app.use('/api/v1/remediation', requireAuth({ allowGuest: true }), remediationRoutes);
+app.use('/api/v1/eval',        requireAuth({ allowGuest: true }), evalRoutes);
+
+// ── Model Context Protocol ────────────────────────────────────────────────
 app.get('/api/mcp/tools', (_req, res) => {
   res.json({ success: true, tools: mcpToolDefinitions });
 });

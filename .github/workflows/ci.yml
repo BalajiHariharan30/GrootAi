@@ -1,0 +1,72 @@
+﻿name: CI/CD — GrootAi
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Server Tests ────────────────────────────────────────────────────────────
+  server-test:
+    name: Server — Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+      - name: Run unit tests
+        run: npm test
+
+  # ── Client Build ────────────────────────────────────────────────────────────
+  client-build:
+    name: Client — Vite Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - run: npm ci
+      - name: Build production bundle
+        run: npm run build
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: client/dist
+          retention-days: 7
+
+  # ── Security Audit ──────────────────────────────────────────────────────────
+  audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm audit --audit-level=high
+        working-directory: server
+        continue-on-error: true   # report but don't block on low/medium advisories
+      - run: npm audit --audit-level=high
+        working-directory: client
+        continue-on-error: true

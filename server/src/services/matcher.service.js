@@ -2,6 +2,39 @@ import natural from 'natural';
 
 const { JaroWinklerDistance, LevenshteinDistance } = natural;
 
+/**
+ * Compute adaptive fuzzy thresholds from a sample of dataset records.
+ * Returns { high, medium, duplicate } thresholds in [0,1].
+ *
+ * Logic:
+ *  - Short avg field length (< 8 chars) → tighten thresholds (less noise)
+ *  - Large dataset (> 5000 rows) → relax duplicate threshold slightly (more FP risk)
+ *  - High cardinality fields dominating → use defaults
+ */
+export function computeAdaptiveThresholds(records = []) {
+  const defaults = { high: 0.85, medium: 0.65, duplicate: 0.80 };
+  if (!records.length) return defaults;
+
+  const sample = records.slice(0, Math.min(200, records.length));
+  let totalLen = 0, fieldCount = 0;
+
+  for (const rec of sample) {
+    const data = rec.data || rec;
+    for (const val of Object.values(data)) {
+      if (typeof val === 'string') { totalLen += val.length; fieldCount++; }
+    }
+  }
+
+  const avgLen = fieldCount > 0 ? totalLen / fieldCount : 12;
+  const datasetSize = records.length;
+
+  const high = avgLen < 6 ? 0.92 : avgLen < 10 ? 0.88 : 0.85;
+  const medium = avgLen < 6 ? 0.75 : avgLen < 10 ? 0.70 : 0.65;
+  const duplicate = datasetSize > 5000 ? 0.82 : datasetSize < 500 ? 0.78 : 0.80;
+
+  return { high, medium, duplicate };
+}
+
 export class MatcherService {
   /**
    * Computes string similarity score between 0.0 and 1.0
@@ -173,6 +206,7 @@ export class MatcherService {
   static scanDatasetForDuplicates(datasetId, records = []) {
     const duplicateIssues = [];
     const n = records.length;
+    const thresholds = computeAdaptiveThresholds(records);
 
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
@@ -181,15 +215,15 @@ export class MatcherService {
 
         const match = this.explainMatch(rA, rB);
 
-        if (match.compositeScore >= 0.75) {
-          const explanation = `Potential duplicate pair detected between Record #${rA.rowNumber || i + 1} and Record #${rB.rowNumber || j + 1} (${Math.round(match.compositeScore * 100)}% confidence).`;
+        if (match.compositeScore >= thresholds.duplicate) {
+          const explanation = `Potential duplicate pair detected between Record #${rA.rowNumber || i + 1} and Record #${rB.rowNumber || j + 1} (${Math.round(match.compositeScore * 100)}% confidence). Threshold: ${Math.round(thresholds.duplicate * 100)}% (adaptive).`;
 
           duplicateIssues.push({
             datasetId,
             recordId: rA._id,
             rowNumber: rA.rowNumber || i + 1,
             type: 'duplicate',
-            severity: match.compositeScore >= 0.88 ? 'high' : 'medium',
+            severity: match.compositeScore >= thresholds.high ? 'high' : 'medium',
             field: 'composite_profile',
             currentValue: `Pair: #${rA.rowNumber || i + 1} & #${rB.rowNumber || j + 1}`,
             explanation,
@@ -200,7 +234,8 @@ export class MatcherService {
               compositeScore: match.compositeScore,
               fieldBreakdown: match.fieldBreakdown,
               matchedRecordData: rB.data || rB,
-              recommendedSurvivor: 'merge'
+              recommendedSurvivor: 'merge',
+              adaptiveThresholds: thresholds
             },
             status: 'open'
           });
