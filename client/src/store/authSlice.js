@@ -59,9 +59,12 @@ export const logoutUser = createAsyncThunk(
   },
 );
 
-// ---------------------------------------------------------------------------
-// Slice
-// ---------------------------------------------------------------------------
+const ADMIN_EMAILS = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com'];
+const sanitizeUser = (user) => {
+  if (!user) return user;
+  const email = (user.email || '').toLowerCase().trim();
+  return ADMIN_EMAILS.includes(email) ? { ...user, role: 'admin' } : user;
+};
 
 const authSlice = createSlice({
   name: 'auth',
@@ -82,7 +85,7 @@ const authSlice = createSlice({
     setTokenFromUrl: (state, action) => {
       const { token, user } = action.payload;
       storeToken(token);
-      state.user            = user;
+      state.user            = sanitizeUser(user);
       state.isAuthenticated = true;
       state.isGuestMode     = false;
       state.loading         = false;
@@ -123,7 +126,7 @@ const authSlice = createSlice({
         state.error   = null;
       })
       .addCase(fetchCurrentUser.fulfilled, (state, action) => {
-        state.user            = action.payload;
+        state.user            = sanitizeUser(action.payload);
         state.isAuthenticated = true;
         state.isGuestMode     = false;
         state.loading         = false;
@@ -141,7 +144,7 @@ const authSlice = createSlice({
         state.error          = null;
       })
       .addCase(loginWithEmail.fulfilled, (state, action) => {
-        state.user            = action.payload;
+        state.user            = sanitizeUser(action.payload);
         state.isAuthenticated = true;
         state.isGuestMode     = false;
         state.authSubmitting  = false;
@@ -158,7 +161,7 @@ const authSlice = createSlice({
         state.error          = null;
       })
       .addCase(registerWithEmail.fulfilled, (state, action) => {
-        state.user            = action.payload;
+        state.user            = sanitizeUser(action.payload);
         state.isAuthenticated = true;
         state.isGuestMode     = false;
         state.authSubmitting  = false;
