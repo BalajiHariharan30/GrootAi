@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @module api
  * @description Centralised fetch wrapper for GrootAi.
  * - Safely parses JSON (never throws on empty / non-JSON bodies)
@@ -14,6 +14,10 @@ export const authHeaders    = () => {
   const t = getStoredToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
+
+// In production (Vercel), VITE_API_URL points to the Render backend.
+// In development (localhost), it falls back to empty string (relative URL).
+const BASE = import.meta.env.VITE_API_URL ?? '';
 
 /**
  * Safe JSON parse — returns null if body is empty or not valid JSON.
@@ -33,7 +37,7 @@ async function safeJson(res) {
  */
 export async function apiFetch(url, opts = {}) {
   try {
-    const res  = await fetch(url, {
+    const res  = await fetch(`${BASE}${url}`, {
       credentials: 'include',
       ...opts,
       headers: {
