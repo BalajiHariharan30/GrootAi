@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "GrootAi - Autonomous Agentic Data Quality & Observability Platform",
   "scripts": {
+    "build": "npm --prefix client install && npm --prefix client run build",
     "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",

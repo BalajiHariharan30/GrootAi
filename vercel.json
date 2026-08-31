@@ -1,11 +1,10 @@
-{
-  "buildCommand": "cd client && npm install && npm run build",
+﻿{
+  "buildCommand": "npm --prefix client install && npm --prefix client run build",
   "outputDirectory": "client/dist",
-  "framework": "vite",
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://grootai-server.onrender.com/api/$1"
+      "destination": "https://grootai-c4hp.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",
