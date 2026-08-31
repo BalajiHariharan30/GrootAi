@@ -63,42 +63,47 @@ passport.use(
         const googleId = profile.id;
         const email    = profile.emails?.[0]?.value ?? '';
         const name     = profile.displayName ?? 'GrootAi User';
-        const avatar   = profile.photos?.[0]?.value ?? null;
+        const cleanEmail = email.toLowerCase().trim();
+        const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
+        const assignedRole = isAdminEmail ? 'admin' : 'steward';
 
         let user = null;
 
         if (getDBStatus()) {
           // MongoDB: findOneAndUpdate (upsert)
           user = await User.findOneAndUpdate(
-            { googleId },
+            { $or: [{ googleId }, { email: cleanEmail }] },
             {
               $set: {
-                email,
+                googleId,
+                email: cleanEmail,
                 name,
                 avatar,
+                role: assignedRole,
                 lastLoginAt: new Date(),
               },
-              $setOnInsert: { role: 'steward' },
             },
             { upsert: true, new: true, runValidators: true },
           );
         } else {
           // In-memory store fallback
-          user = store.users?.find((u) => u.googleId === googleId);
+          user = store.users?.find((u) => u.googleId === googleId || u.email === cleanEmail);
 
           if (user) {
-            user.email       = email;
+            user.googleId    = googleId;
+            user.email       = cleanEmail;
             user.name        = name;
             user.avatar      = avatar;
+            user.role        = assignedRole;
             user.lastLoginAt = new Date();
           } else {
             user = {
               _id:         store.generateId(),
               googleId,
-              email,
+              email:       cleanEmail,
               name,
               avatar,
-              role:        'steward',
+              role:        assignedRole,
               lastLoginAt: new Date(),
               createdAt:   new Date(),
             };

@@ -112,13 +112,17 @@ router.post(
     const salt           = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Auto-promote Balaji to Admin
+    const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
+    const assignedRole = isAdminEmail ? 'admin' : 'steward';
+
     let newUser = null;
     if (getDBStatus()) {
       newUser = await User.create({
         name:        name.trim(),
         email:       cleanEmail,
         password:    hashedPassword,
-        role:        'steward',
+        role:        assignedRole,
         lastLoginAt: new Date(),
       });
     } else {
@@ -127,7 +131,7 @@ router.post(
         name:        name.trim(),
         email:       cleanEmail,
         password:    hashedPassword,
-        role:        'steward',
+        role:        assignedRole,
         avatar:      null,
         lastLoginAt: new Date(),
         createdAt:   new Date(),
@@ -208,6 +212,12 @@ router.post(
         success: false,
         error:   'Invalid email or password. Please check your credentials.',
       });
+    }
+
+    // Auto-promote Balaji to Admin
+    const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
+    if (isAdminEmail && user.role !== 'admin') {
+      user.role = 'admin';
     }
 
     // Update lastLoginAt
