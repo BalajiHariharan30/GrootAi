@@ -298,6 +298,14 @@ router.get(
   '/me',
   requireAuth(),
   asyncHandler(async (req, res) => {
+    const cleanEmail = (req.user.email || '').toLowerCase().trim();
+    const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
+    const role = isAdminEmail ? 'admin' : (req.user.role || 'steward');
+
+    if (isAdminEmail && getDBStatus()) {
+      User.updateOne({ email: cleanEmail }, { $set: { role: 'admin' } }).catch(() => {});
+    }
+
     res.json({
       success: true,
       data: {
@@ -305,7 +313,7 @@ router.get(
         email:  req.user.email,
         name:   req.user.name,
         avatar: req.user.avatar,
-        role:   req.user.role,
+        role,
       },
     });
   }),

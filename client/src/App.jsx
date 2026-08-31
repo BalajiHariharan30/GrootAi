@@ -289,6 +289,10 @@ export function App() {
         const payloadB64 = token.split('.')[1];
         const payload    = JSON.parse(atob(payloadB64));
 
+        const emailClean = (payload.email || '').toLowerCase().trim();
+        const isAdmin = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com'].includes(emailClean);
+        const role = isAdmin ? 'admin' : (payload.role ?? 'steward');
+
         dispatch(setTokenFromUrl({
           token,
           user: {
@@ -296,7 +300,7 @@ export function App() {
             email:  payload.email,
             name:   payload.name,
             avatar: payload.avatar ?? null,
-            role:   payload.role   ?? 'steward',
+            role,
           },
         }));
 
