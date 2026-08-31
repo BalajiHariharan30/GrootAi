@@ -48,10 +48,23 @@ const app = express();
 // ── Security & Parsing ────────────────────────────────────────────────────
 app.use(
   cors({
-    origin:         process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:5173',
+    origin: (origin, cb) => {
+      const allowed = [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        process.env.CORS_ORIGIN,
+        process.env.FRONTEND_URL,
+        process.env.CLIENT_URL,
+      ].filter(Boolean);
+      // Allow requests with no origin (mobile apps, curl, Render health checks)
+      if (!origin || allowed.some(o => origin.startsWith(o))) return cb(null, true);
+      // Allow any vercel.app subdomain
+      if (/\.vercel\.app$/.test(origin)) return cb(null, true);
+      return cb(null, true); // Open for now — lock down after confirming Vercel URL
+    },
     methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
-    credentials:    true,          // Required for cookie-based auth
+    credentials:    true,
   }),
 );
 app.use(express.json({ limit: '10mb' }));
