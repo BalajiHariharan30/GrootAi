@@ -8,6 +8,7 @@ import {
   triggerScan,
   setSelectedDataset,
 } from '../store/datasetSlice.js';
+import { apiGet } from '../store/api.js';
 import { QualityScoreGauge } from '../components/QualityScoreGauge.jsx';
 import { VirtualizedTable }  from '../components/VirtualizedTable.jsx';
 import { ExportService }     from '../services/ExportService.js';
@@ -180,9 +181,8 @@ export const DashboardPage = ({ onOpenUpload, onNavigate }) => {
   const fetchRecords = async (id) => {
     setRecordsLoading(true);
     try {
-      const res  = await fetch(`/api/datasets/${id}/records?limit=100`);
-      const data = await res.json();
-      setRecords(data.data || []);
+      const { ok, data } = await apiGet(`/api/datasets/${id}/records?limit=100`);
+      setRecords(ok && data?.data ? data.data : []);
     } catch {
       setRecords([]);
     } finally {

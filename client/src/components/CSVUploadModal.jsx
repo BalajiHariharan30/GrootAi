@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, UploadCloud, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { fetchDatasets, fetchDatasetProfile } from '../store/datasetSlice.js';
+import { apiFetch } from '../store/api.js';
 
 export const CSVUploadModal = ({ isOpen, onClose }) => {
   const dispatch = useDispatch();
@@ -36,12 +37,11 @@ export const CSVUploadModal = ({ isOpen, onClose }) => {
     formData.append('description', description);
 
     try {
-      const res = await fetch('/api/datasets/upload', {
+      const { ok, data } = await apiFetch('/api/datasets/upload', {
         method: 'POST',
         body: formData
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
+      if (!ok || !data?.success) throw new Error(data?.error || 'Upload failed');
 
       dispatch(fetchDatasets());
       if (data.data?._id) {

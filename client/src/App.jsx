@@ -46,6 +46,7 @@ import {
   setTokenFromUrl,
   enterGuestMode,
 }                            from './store/authSlice.js';
+import { apiGet }            from './store/api.js';
 
 // ---------------------------------------------------------------------------
 // Socket singleton
@@ -81,9 +82,10 @@ function AppShell() {
     dispatch(fetchDatasets());
     dispatch(fetchPendingRemediations());
 
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => setServerHealth(data))
+    apiGet('/api/v1/health')
+      .then(({ ok, data }) => {
+        if (ok && data) setServerHealth(data);
+      })
       .catch(() => {});
   }, [dispatch]);
 
