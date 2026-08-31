@@ -28,7 +28,7 @@ const router = express.Router();
 
 const JWT_SECRET     = process.env.JWT_SECRET     ?? 'grootai-dev-secret-change-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
-const FRONTEND_URL   = process.env.FRONTEND_URL   ?? 'http://localhost:5173';
+const FRONTEND_URL   = process.env.CLIENT_URL ?? process.env.FRONTEND_URL ?? (process.env.NODE_ENV === 'production' ? 'https://grootai.vercel.app' : 'http://localhost:5173');
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 

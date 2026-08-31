@@ -68,7 +68,8 @@ FeaturePill.propTypes   = {
 // ---------------------------------------------------------------------------
 const GoogleSignInButton = memo(() => {
   const handleGoogleLogin = () => {
-    window.location.href = '/api/auth/google';
+    const base = import.meta.env.VITE_API_URL || '';
+    window.location.href = `${base}/api/auth/google`;
   };
 
   return (
