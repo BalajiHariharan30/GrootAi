@@ -191,22 +191,22 @@ export const RuleComposerPage = () => {
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
               Natural Language Rule Studio
             </h1>
-            <StatusBadge label="Agentic Tool Use" variant="info" dot pulse />
-            {/* AI mode pill — shows which engine is active */}
+            <StatusBadge label="Agentic Rule Engine" variant="info" dot pulse />
+            {/* AI mode pill — shows which engine is active after first parse */}
             {candidateRule?.aiMode === 'claude' ? (
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">
                 ✦ Claude 3.5 Sonnet
               </span>
             ) : candidateRule?.aiMode === 'ast_parser' ? (
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-700 text-slate-300 border border-slate-600">
-                ⚙ Grounded AST Engine
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
+                ⚙ Grounded AST Engine (Free)
               </span>
             ) : null}
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Express business data quality rules in plain English. Constrained AI
-            tool-calling compiles them into deterministic ASTs with
-            Execute-Before-Trust sample validation.
+            Describe data quality rules in plain English — the grounded AI engine
+            compiles them into deterministic ASTs validated with Execute-Before-Trust.
+            Works fully offline, zero API cost.
           </p>
         </motion.div>
 

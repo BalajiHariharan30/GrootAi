@@ -50,7 +50,8 @@ const inFlightRequests = new Map();
  */
 router.post(
   '/parse',
-  requireAuth(),          // Gap 1 fix: prevent unauthenticated AI calls burning API quota
+  requireAuth({ allowGuest: true }), // Parse is read-only (AST/Claude preview) — guests can use it
+                                      // Save/Activate below still requires full auth
   validate([
     body('naturalLanguageInput')
       .trim()
