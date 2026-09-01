@@ -220,8 +220,11 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenUpload }) => {
             className="md:hidden p-2 rounded-lg bg-slate-900 border border-slate-800
                        text-slate-400 hover:text-white transition-colors"
             onClick={() => setMobileOpen((v) => !v)}
+            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav-drawer"
           >
-            {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            {mobileOpen ? <X className="w-4 h-4" aria-hidden="true" /> : <Menu className="w-4 h-4" aria-hidden="true" />}
           </button>
 
           {/* User Avatar */}
@@ -233,6 +236,7 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenUpload }) => {
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
+          id="mobile-nav-drawer"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}

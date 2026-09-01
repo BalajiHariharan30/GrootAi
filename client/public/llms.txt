@@ -1,0 +1,43 @@
+# GrootAi — Enterprise Data Quality Intelligence Platform
+
+GrootAi is a production-grade AI-powered data quality platform built for enterprise data stewardship.
+It enables teams to define, enforce, and remediate data quality rules using natural language — with full human oversight and audit trails.
+
+## Core Capabilities
+
+- **Natural Language Rule Studio**: Express data quality rules in plain English; the Grounded AI Engine compiles them into deterministic, executable ASTs
+- **Data Profiling**: Automated schema inference, completeness scoring, and anomaly detection across datasets
+- **Issue Detection**: Rule-engine scans flag violations with row-level detail and issue tracking
+- **AI-Assisted Remediation**: AI proposes data fixes for human review and approval — no auto-mutation without consent
+- **Duplicate Detection**: Fuzzy matching and field-level similarity scoring to surface near-duplicate records
+- **Audit Trail**: Every approve/reject/rollback is logged with actor, timestamp, and reason
+
+## Product Links
+
+- [Live Application](https://grootai.vercel.app)
+- [Dashboard](https://grootai.vercel.app/dashboard)
+- [Rule Studio](https://grootai.vercel.app/rules)
+- [Issue Review](https://grootai.vercel.app/issues)
+- [Remediation Center](https://grootai.vercel.app/remediation)
+- [AI Eval Suite](https://grootai.vercel.app/eval)
+
+## API
+
+- [Backend API](https://grootai-c4hp.onrender.com)
+- [API Health](https://grootai-c4hp.onrender.com/api/eval/system-stats)
+- [Dataset Listing](https://grootai-c4hp.onrender.com/api/datasets)
+
+## Technical Details
+
+- Frontend: React 18 + Vite + Tailwind CSS, deployed on Vercel
+- Backend: Node.js Express (ESM), deployed on Render
+- Database: MongoDB Atlas
+- AI Engine: Grounded deterministic AST parser (free, local) with optional Claude 3.5 Sonnet upgrade
+- Auth: JWT (httpOnly cookie) + Google OAuth 2.0
+
+## Usage Notes
+
+- Guest users can view datasets, issues, and the Rule Studio in read-only mode
+- Steward role required to approve or reject remediation proposals
+- Admin role required for seeding data or running the eval suite
+- The app is free to use — no API key required for the AI rule engine
