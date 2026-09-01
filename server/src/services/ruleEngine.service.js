@@ -73,9 +73,11 @@ export class RuleEngineService {
         if (!fieldValue) {
           isMatch = false;
         } else {
-          const phoneRegex = /^(\+?\d{1,3}[-.\s]?)?(\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{3,4}$/;
-          const digits = String(fieldValue).replace(/\D/g, '');
-          isMatch = phoneRegex.test(String(fieldValue).trim()) && digits.length >= 7 && String(fieldValue) !== 'N/A';
+          const str = String(fieldValue).trim();
+          const digits = str.replace(/\D/g, '');
+          // Valid phone must have 7 to 15 digits (E.164 standard) and follow allowed formatting characters
+          const validFormat = /^(\+?\d{1,4}[-.\s]?)?(\(?\d{1,5}\)?[-.\s]?)?[\d\s.-]{4,14}\d$/;
+          isMatch = validFormat.test(str) && digits.length >= 7 && digits.length <= 15 && str !== 'N/A';
         }
         break;
 
