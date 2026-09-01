@@ -69,7 +69,7 @@ export const RuleTestPreview = ({ candidateRule, onActivate, onDiscard, isActiva
               <Code2 className="w-4 h-4 text-brand-cyan" />
               <span>Structured AST Conditions</span>
             </span>
-            <span className="text-[11px] font-mono text-slate-500">Logic: {structuredRule?.logic || 'AND'}</span>
+            <span className="text-[11px] font-mono text-slate-400">Logic: {structuredRule?.logic || 'AND'}</span>
           </div>
 
           <div className="space-y-2">
@@ -99,7 +99,7 @@ export const RuleTestPreview = ({ candidateRule, onActivate, onDiscard, isActiva
               <ShieldCheck className="w-4 h-4 text-brand-400" />
               <span>Execute-Before-Trust Test Run</span>
             </span>
-            <span className="text-[11px] text-slate-500 font-mono">Tested on {testedRows} real rows</span>
+            <span className="text-[11px] text-slate-400 font-mono">Tested on {testedRows} real rows</span>
           </div>
 
           {/* Safety Alert if Unsafe */}
@@ -142,7 +142,7 @@ export const RuleTestPreview = ({ candidateRule, onActivate, onDiscard, isActiva
           {/* Sample Failures List */}
           {sampleFailures.length > 0 && (
             <div className="space-y-1.5">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Sample Discrepancies</span>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sample Discrepancies</span>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {sampleFailures.map((fail, idx) => (
                   <div key={idx} className="bg-slate-950/80 border border-slate-800/80 p-2 rounded-lg text-xs flex items-center justify-between">
@@ -158,3 +158,4 @@ export const RuleTestPreview = ({ candidateRule, onActivate, onDiscard, isActiva
     </div>
   );
 };
+

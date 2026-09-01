@@ -40,7 +40,7 @@ const TableRow = memo(({ index, style, data }) => {
     >
       {/* Row Index & Issue Dot */}
       <div className="w-16 flex items-center space-x-1.5 shrink-0">
-        <span className="text-slate-500 font-mono">#{record.rowNumber ?? index + 1}</span>
+        <span className="text-slate-400 font-mono">#{record.rowNumber ?? index + 1}</span>
         <span
           className={`w-2 h-2 rounded-full ${
             hasIssue ? 'bg-brand-rose animate-pulse' : 'bg-brand-500/40'
@@ -57,7 +57,7 @@ const TableRow = memo(({ index, style, data }) => {
           return (
             <div key={key} className="flex-1 truncate">
               {isNull ? (
-                <span className="text-slate-600 italic">null</span>
+                <span className="text-slate-400 italic">null</span>
               ) : typeof val === 'number' ? (
                 <span className="font-mono text-cyan-300">{val.toLocaleString('en-IN')}</span>
               ) : (
@@ -203,7 +203,7 @@ export const VirtualizedTable = ({ records = [], columns = [], onInspectRecord }
             animate={{ opacity: 1 }}
             className="flex flex-col items-center justify-center h-full text-slate-500 text-xs space-y-2"
           >
-            <CheckCircle className="w-8 h-8 text-slate-600" />
+            <CheckCircle className="w-8 h-8 text-slate-400" />
             <p>No records match the current search or filter</p>
           </motion.div>
         ) : (
@@ -227,3 +227,4 @@ VirtualizedTable.propTypes = {
   columns:         PropTypes.arrayOf(PropTypes.shape({ name: PropTypes.string })),
   onInspectRecord: PropTypes.func,
 };
+

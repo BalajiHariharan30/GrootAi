@@ -228,7 +228,7 @@ export const AIExplainModal = () => {
                       </div>
                     </div>
                     <div className="bg-slate-900/70 rounded-lg p-3 border border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Agent Reasoning</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Agent Reasoning</p>
                       <p className="text-slate-300 leading-relaxed">{explanation.whyAIDidThis.agentReasoning}</p>
                     </div>
                     <p className="text-slate-500 flex items-center space-x-1">
@@ -274,12 +274,12 @@ export const AIExplainModal = () => {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between">
                               <span className="text-[11px] font-bold text-slate-300">{entry.action}</span>
-                              <span className="text-[10px] font-mono text-slate-500 ml-2 shrink-0">
+                              <span className="text-[10px] font-mono text-slate-400 ml-2 shrink-0">
                                 {new Date(entry.timestamp).toLocaleTimeString()}
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">{entry.details}</p>
-                            <p className="text-[10px] text-slate-600 mt-0.5">Actor: {entry.actor}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Actor: {entry.actor}</p>
                           </div>
                         </div>
                       ))}
@@ -334,3 +334,5 @@ export const AIExplainModal = () => {
     </AnimatePresence>
   );
 };
+
+

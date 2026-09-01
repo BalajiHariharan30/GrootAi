@@ -85,7 +85,7 @@ export const MetricCard = ({
 
         {(trendLabel || sub) && (
           <div className="flex items-center justify-between">
-            {sub && <span className="text-[11px] text-slate-500">{sub}</span>}
+            {sub && <span className="text-[11px] text-slate-400">{sub}</span>}
             {trend && trendLabel && (
               <span className={clsx('flex items-center space-x-1 text-[10px] font-bold', trendColor)}>
                 <TrendIcon className="w-3 h-3" />
@@ -110,3 +110,4 @@ MetricCard.propTypes = {
   delay:      PropTypes.number,
   accent:     PropTypes.oneOf(['emerald', 'cyan', 'indigo', 'rose', 'amber']),
 };
+

@@ -84,7 +84,7 @@ function StrategyBar({ strategy, delay }) {
           className={`h-full rounded-full ${barColor}`}
         />
       </div>
-      <p className="text-[10px] text-slate-500">
+      <p className="text-[10px] text-slate-400">
         {strategy.total} total decisions
       </p>
     </motion.div>
@@ -264,7 +264,7 @@ export const EvalSuitePage = () => {
                 ].map((s) => (
                   <div key={s.label} className="glass-panel p-3 rounded-xl border border-slate-800 text-center">
                     <p className={`text-2xl font-extrabold font-mono ${s.color}`}>{s.value}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{s.label}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{s.label}</p>
                   </div>
                 ))}
               </div>
@@ -291,7 +291,7 @@ export const EvalSuitePage = () => {
               {/* Per-Strategy Approval Bars */}
               {ls.strategies?.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center space-x-2">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
                     <BarChart3 className="w-3.5 h-3.5" />
                     <span>Approval Rate by AI Strategy</span>
                   </h4>
@@ -301,7 +301,7 @@ export const EvalSuitePage = () => {
                     ))}
                   </div>
 
-                  <p className="text-[11px] text-slate-600 leading-relaxed pt-1 border-t border-slate-800/60">
+                  <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-800/60">
                     💡 The AI blends 70% historical approval rate + 30% static prior when calculating confidence for new proposals.
                     Strategies with &lt;60% approval are flagged as Low Confidence and appear red in the HITL queue.
                   </p>
@@ -394,3 +394,5 @@ export const EvalSuitePage = () => {
     </PageTransition>
   );
 };
+
+

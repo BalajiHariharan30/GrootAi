@@ -351,7 +351,7 @@ export const LoginPage = () => {
             {/* ── Divider ──────────────────────────────────────────── */}
             <div className="flex items-center space-x-3">
               <div className="flex-1 h-px bg-slate-800" />
-              <span className="text-[11px] text-slate-500 font-medium">or continue with</span>
+              <span className="text-[11px] text-slate-400 font-medium">or continue with</span>
               <div className="flex-1 h-px bg-slate-800" />
             </div>
 
@@ -391,10 +391,10 @@ export const LoginPage = () => {
 
         {/* Bottom tagline & Copyright */}
         <div className="text-center space-y-1 mt-4">
-          <p className="text-[11px] text-slate-500 font-medium">
+          <p className="text-[11px] text-slate-400 font-medium">
             © {new Date().getFullYear()} GrootAi · All rights Reserved by Balaji H
           </p>
-          <p className="text-[10px] text-slate-600">
+          <p className="text-[10px] text-slate-400">
             Zero Unsupervised Data Mutations · Execute-Before-Trust™ · MCP Protocol
           </p>
         </div>
@@ -402,3 +402,5 @@ export const LoginPage = () => {
     </div>
   );
 };
+
+

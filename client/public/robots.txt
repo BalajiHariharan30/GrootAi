@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Block private/API paths from crawlers
+Disallow: /api/
+Disallow: /api/auth/
+
+Sitemap: https://grootai.vercel.app/sitemap.xml

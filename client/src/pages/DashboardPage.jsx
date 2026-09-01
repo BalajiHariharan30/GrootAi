@@ -88,12 +88,12 @@ const DatasetCard = React.memo(({ dataset, isSelected, onSelect, onScan, scannin
         <div className="flex items-center space-x-2 truncate min-w-0">
           <span className="text-xl shrink-0" title={`Source: ${dataset.sourceType}`}>{srcIcon}</span>
           <div className="min-w-0">
-            <h3 className="font-extrabold text-sm text-white truncate group-hover:text-brand-400 transition-colors leading-tight">
+            <p className="font-extrabold text-sm text-white truncate group-hover:text-brand-400 transition-colors leading-tight">
               {fileName}
-            </h3>
+            </p>
             {/* File / org identifier row */}
             <div className="flex items-center space-x-2 mt-0.5">
-              <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+              <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
                 {dataset.sourceType === 'csv' ? '📎 Uploaded CSV' : dataset.sourceType === 'demo' ? '🏢 Demo Dataset' : dataset.sourceType}
               </span>
               {dataset.sourceType === 'csv' && (
@@ -269,7 +269,7 @@ export const DashboardPage = ({ onOpenUpload, onNavigate }) => {
           <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
             <Database className="w-4 h-4 text-brand-cyan" />
             <span>Registered Datasets</span>
-            <span className="text-slate-600 normal-case font-normal tracking-normal">
+            <span className="text-slate-400 normal-case font-normal tracking-normal">
               ({filteredDatasets.length} of {datasets.length})
             </span>
           </h2>
@@ -409,3 +409,5 @@ export const DashboardPage = ({ onOpenUpload, onNavigate }) => {
     </div>
   );
 };
+
+

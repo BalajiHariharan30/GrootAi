@@ -193,7 +193,7 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenUpload }) => {
                           <span className="w-2 h-2 rounded-full bg-brand-amber mt-1.5 shrink-0 animate-pulse" />
                           <div className="min-w-0">
                             <p className="text-xs text-slate-200 leading-snug">{n.text}</p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">{n.time}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{n.time}</p>
                           </div>
                         </div>
                       ))}
@@ -284,3 +284,4 @@ Navbar.propTypes = {
   setActiveTab: PropTypes.func.isRequired,
   onOpenUpload: PropTypes.func.isRequired,
 };
+

@@ -150,7 +150,7 @@ function AppShell() {
                 Operating in zero-dependency in-memory mode. Data mutations are preserved in process memory and reset upon server restart.
               </span>
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">Connect MONGODB_URI for persistence</span>
+            <span className="text-[10px] text-slate-400 font-mono">Connect MONGODB_URI for persistence</span>
           </div>
         </div>
       )}
@@ -232,21 +232,21 @@ function AppShell() {
       <CSVUploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-dark-950/90 py-6 text-xs text-slate-500">
+      <footer className="border-t border-slate-900 bg-dark-950/90 py-6 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8
                         flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-brand-400" />
+            <Sparkles className="w-4 h-4 text-brand-400" aria-hidden="true" />
             <span>GrootAi · Autonomous Agentic Data Quality &amp; Observability Platform</span>
           </div>
           <div className="flex items-center space-x-4 text-slate-400 font-mono text-[11px]">
-            <span className={`flex items-center space-x-1 ${isConnected ? 'text-emerald-400' : 'text-slate-500'}`}>
-              {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+            <span className={`flex items-center space-x-1 ${isConnected ? 'text-emerald-400' : 'text-slate-400'}`}>
+              {isConnected ? <Wifi className="w-3 h-3" aria-hidden="true" /> : <WifiOff className="w-3 h-3" aria-hidden="true" />}
               <span>{isConnected ? 'Live' : 'Offline'}</span>
             </span>
-            <span>·</span>
+            <span aria-hidden="true">·</span>
             <span>MCP Server Active</span>
-            <span>·</span>
+            <span aria-hidden="true">·</span>
             <span>Zero Unsupervised Mutations</span>
           </div>
         </div>
@@ -369,3 +369,4 @@ export function App() {
 }
 
 export default App;
+

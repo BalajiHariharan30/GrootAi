@@ -87,7 +87,7 @@ const ActiveRuleCard = memo(({ rule }) => (
       />
     </div>
     <p className="text-xs text-slate-400">{rule.description || rule.naturalLanguageInput}</p>
-    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
       <span className="capitalize">Category: {rule.category}</span>
       <span className="capitalize font-mono">Severity: {rule.severity}</span>
     </div>
@@ -247,7 +247,7 @@ export const RuleComposerPage = () => {
 
             {/* Suggestion chips */}
             <div className="space-y-1.5">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Suggested Enterprise Prompts:
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -330,7 +330,7 @@ export const RuleComposerPage = () => {
             </h2>
             <div className="flex items-center space-x-2">
               {activeDataset && (
-                <span className="text-[10px] font-bold text-slate-500 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
                   📂 {activeDataset.name}
                 </span>
               )}
@@ -344,14 +344,14 @@ export const RuleComposerPage = () => {
               animate={{ opacity: 1 }}
               className="glass-panel p-8 rounded-2xl border border-slate-800 text-center space-y-3"
             >
-              <Code2 className="w-10 h-10 mx-auto text-slate-600 mb-2" />
+              <Code2 className="w-10 h-10 mx-auto text-slate-400 mb-2" />
               <p className="text-sm font-bold text-slate-300">No Active Rules Yet</p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                 {activeDataset
                   ? `No rules defined for "${activeDataset.name}". Type a business rule above (e.g. "email must be valid") and click Compile, then Confirm & Activate.`
                   : 'Select a dataset from the Catalog, then type a rule in plain English above to get started.'}
               </p>
-              <div className="text-[11px] text-slate-600 mt-1">
+              <div className="text-[11px] text-slate-400 mt-1">
                 💡 Try a suggested prompt chip above to create your first rule instantly.
               </div>
             </motion.div>
@@ -371,3 +371,5 @@ export const RuleComposerPage = () => {
     </PageTransition>
   );
 };
+
+

@@ -37,7 +37,7 @@ function FrequencyBarChart({ topValues }) {
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-800/80">
-      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
         Value Distribution
       </p>
       <div className="space-y-1.5">
@@ -106,7 +106,7 @@ export const ColumnProfileCard = ({ column }) => {
               style={{ width: `${Math.min(100, column.nullPercent)}%` }}
             />
           </div>
-          <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
             <span>0%</span>
             <span className="text-slate-500">{(100 - column.nullPercent).toFixed(1)}% complete</span>
             <span>100%</span>
@@ -126,7 +126,7 @@ export const ColumnProfileCard = ({ column }) => {
 
         {/* Numeric Stats Row */}
         {(column.stats?.min !== undefined || column.stats?.avg !== undefined) && (
-          <div className="flex items-center justify-around text-[11px] text-slate-500 bg-slate-900/60 rounded-lg px-2 py-1.5 mb-3 border border-slate-800/50">
+          <div className="flex items-center justify-around text-[11px] text-slate-400 bg-slate-900/60 rounded-lg px-2 py-1.5 mb-3 border border-slate-800/50">
             {column.stats?.min !== undefined && (
               <span>Min: <span className="text-slate-300 font-mono font-bold">{typeof column.stats.min === 'number' ? column.stats.min.toLocaleString('en-IN') : column.stats.min}</span></span>
             )}
@@ -143,7 +143,7 @@ export const ColumnProfileCard = ({ column }) => {
         {/* Sample Values */}
         {column.sampleValues && column.sampleValues.length > 0 && (
           <div className="space-y-1">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Sample Values</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Sample Values</span>
             <div className="flex flex-wrap gap-1">
               {column.sampleValues.slice(0, 3).map((val, idx) => (
                 <span
@@ -163,3 +163,5 @@ export const ColumnProfileCard = ({ column }) => {
     </div>
   );
 };
+
+

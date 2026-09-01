@@ -149,7 +149,7 @@ function SummaryBar({ proposals }) {
           className="glass-panel p-3 rounded-xl border border-slate-800 text-center"
         >
           <p className={`text-xl font-extrabold font-mono ${s.color}`}>{s.value}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{s.label}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{s.label}</p>
         </div>
       ))}
     </div>
@@ -359,7 +359,7 @@ export const RemediationPage = () => {
                       >
                         {label}
                         {key !== 'all' && (
-                          <span className="ml-1 text-slate-600">
+                          <span className="ml-1 text-slate-400">
                             ({pendingList.filter((p) => {
                               const c = p.confidence ?? 0;
                               if (key === 'high')   return c >= 0.8;
@@ -520,4 +520,6 @@ export const RemediationPage = () => {
     </PageTransition>
   );
 };
+
+
 

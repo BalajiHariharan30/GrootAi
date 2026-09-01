@@ -134,7 +134,7 @@ export const RemediationProposalCard = ({ proposal, onApprove, onReject, isProce
       {/* Action Footer */}
       {!showRejectBox && (
         <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-          <span className="text-[11px] text-slate-500">Human confirmation gate enforced</span>
+          <span className="text-[11px] text-slate-400">Human confirmation gate enforced</span>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowRejectBox(true)}
@@ -157,3 +157,4 @@ export const RemediationProposalCard = ({ proposal, onApprove, onReject, isProce
     </div>
   );
 };
+

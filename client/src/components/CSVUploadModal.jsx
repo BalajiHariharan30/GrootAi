@@ -120,7 +120,7 @@ export const CSVUploadModal = ({ isOpen, onClose }) => {
                 <div className="text-center text-xs text-slate-400">
                   <UploadCloud className="w-8 h-8 text-slate-500 mx-auto mb-2" />
                   <p className="font-semibold text-slate-300">Click to select or drag CSV here</p>
-                  <p className="text-[10px] text-slate-500 mt-1">Up to 50MB tabular dataset</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Up to 50MB tabular dataset</p>
                 </div>
               )}
             </label>
@@ -147,3 +147,4 @@ export const CSVUploadModal = ({ isOpen, onClose }) => {
     </div>
   );
 };
+

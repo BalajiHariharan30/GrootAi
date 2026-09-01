@@ -98,7 +98,7 @@ export const QualityScoreGauge = ({ score = 100, dimensions = {}, rowCount = 0 }
                   style={{ width: `${dim.value}%` }}
                 />
               </div>
-              <span className="text-[10px] text-slate-500 mt-1 block">{dim.desc}</span>
+              <span className="text-[10px] text-slate-400 mt-1 block">{dim.desc}</span>
             </div>
           ))}
         </div>
@@ -106,3 +106,4 @@ export const QualityScoreGauge = ({ score = 100, dimensions = {}, rowCount = 0 }
     </div>
   );
 };
+

@@ -209,7 +209,7 @@ export const SettingsPage = () => {
 
         {/* Footer Attribution */}
         <div className="text-center pt-2">
-          <p className="text-[11px] text-slate-500 font-medium">
+          <p className="text-[11px] text-slate-400 font-medium">
             © {new Date().getFullYear()} GrootAi · All rights Reserved by Balaji H
           </p>
         </div>
@@ -218,3 +218,4 @@ export const SettingsPage = () => {
     </PageTransition>
   );
 };
+
