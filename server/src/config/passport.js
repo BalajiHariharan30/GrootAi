@@ -22,6 +22,7 @@ import { User }            from '../models/User.js';
 import { store }           from '../data/inMemoryStore.js';
 import { getDBStatus }     from '../config/db.js';
 import logger              from '../config/logger.js';
+import { ADMIN_EMAILS }    from './adminEmails.js';
 
 // Load .env from both local and root if present
 const __filename = fileURLToPath(import.meta.url);
@@ -60,12 +61,12 @@ passport.use(
      */
     async (_accessToken, _refreshToken, profile, done) => {
       try {
-        const googleId = profile.id;
-        const email    = profile.emails?.[0]?.value ?? '';
-        const name     = profile.displayName ?? 'GrootAi User';
+        const googleId   = profile.id;
+        const email      = profile.emails?.[0]?.value ?? '';
+        const name       = profile.displayName ?? 'GrootAi User';
+        const avatar     = profile.photos?.[0]?.value ?? null;   // BUG FIX: was undefined
         const cleanEmail = email.toLowerCase().trim();
-        const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
-        const assignedRole = isAdminEmail ? 'admin' : 'steward';
+        const assignedRole = ADMIN_EMAILS.includes(cleanEmail) ? 'admin' : 'steward';
 
         let user = null;
 

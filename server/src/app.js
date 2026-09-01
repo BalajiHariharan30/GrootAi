@@ -9,9 +9,15 @@
  * Auth note: Passport.js is initialized here in stateless mode (no sessions).
  * All protected routes use `requireAuth()` JWT middleware instead of
  * Passport sessions to keep the server horizontally scalable.
+ *
+ * Security:
+ *   - helmet sets sane HTTP security headers (X-Content-Type-Options, CSP, etc.)
+ *   - CORS is locked to an explicit whitelist (Vercel + localhost)
+ *   - Mutation routes (POST/PATCH/DELETE) require authentication even on guest-enabled paths
  */
 import express          from 'express';
 import cors             from 'cors';
+import helmet           from 'helmet';
 import cookieParser     from 'cookie-parser';
 import dotenv           from 'dotenv';
 
@@ -20,9 +26,10 @@ import passportInstance from './config/passport.js';
 
 // Middleware
 import { apiLimiter }    from './middleware/rateLimiter.js';
+import { authLimiter }   from './middleware/authLimiter.js';
 import { errorHandler }  from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
-import { requireAuth }   from './middleware/requireAuth.js';
+import { requireAuth, requireRole } from './middleware/requireAuth.js';
 
 // Domain routers
 import authRoutes        from './routes/auth.routes.js';
@@ -38,6 +45,8 @@ import { mcpToolDefinitions, handleMCPToolCall } from './mcp/server.js';
 // Config
 import { asyncHandler }  from './middleware/asyncHandler.js';
 import logger            from './config/logger.js';
+import { getDBStatus }   from './config/db.js';
+import { cache }         from './cache/redisClient.js';
 
 dotenv.config();
 
@@ -45,28 +54,46 @@ dotenv.config();
 const app = express();
 // ---------------------------------------------------------------------------
 
-// ── Security & Parsing ────────────────────────────────────────────────────
+// ── Security Headers (helmet) ──────────────────────────────────────────────
+// helmet sets X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security,
+// X-XSS-Protection, etc. — free, production-standard, no config required.
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false, // Allow Vite dev server embeds in dev
+    contentSecurityPolicy: false,      // Managed by Vercel/CDN in production
+  }),
+);
+
+// ── CORS ──────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://grootai.vercel.app',
+  'https://grootai-balaji.vercel.app',
+  process.env.CORS_ORIGIN,
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 app.use(
   cors({
     origin: (origin, cb) => {
-      const allowed = [
-        'http://localhost:5173',
-        'http://localhost:3000',
-        process.env.CORS_ORIGIN,
-        process.env.FRONTEND_URL,
-        process.env.CLIENT_URL,
-      ].filter(Boolean);
-      // Allow requests with no origin (mobile apps, curl, Render health checks)
-      if (!origin || allowed.some(o => origin.startsWith(o))) return cb(null, true);
-      // Allow any vercel.app subdomain
-      if (/\.vercel\.app$/.test(origin)) return cb(null, true);
-      return cb(null, true); // Open for now — lock down after confirming Vercel URL
+      // Allow requests with no origin (mobile apps, curl, Render health checks, Postman)
+      if (!origin) return cb(null, true);
+      // Allow exact matches
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      // Allow any *.vercel.app subdomain (preview deployments)
+      if (/^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin)) return cb(null, true);
+      // BUG FIX: reject unknown origins instead of silently accepting everything
+      logger.warn({ event: 'cors_rejected', origin });
+      return cb(new Error(`CORS: origin '${origin}' is not allowed`));
     },
     methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
     credentials:    true,
   }),
 );
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());            // Parse httpOnly auth cookie
@@ -79,9 +106,6 @@ app.use(requestLogger);
 
 // ── Rate Limiting ─────────────────────────────────────────────────────────
 app.use('/api/', apiLimiter);
-
-import { getDBStatus } from './config/db.js';
-import { cache }       from './cache/redisClient.js';
 
 // ── Health (public) ───────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
@@ -102,23 +126,24 @@ app.get('/api/health', (_req, res) => {
 // Versioned alias
 app.get('/api/v1/health', (_req, res) => res.redirect(307, '/api/health'));
 
-// ── Auth Routes (public) ───────────────────────────────────────────────────
-app.use('/api/auth',    authRoutes);
-app.use('/api/v1/auth', authRoutes);
+// ── Auth Routes (public) — with strict auth rate limiter ───────────────────
+app.use('/api/auth',    authLimiter, authRoutes);
+app.use('/api/v1/auth', authLimiter, authRoutes);
 
 // ── Protected Domain Routes ───────────────────────────────────────────────
-// Both /api/ (legacy) and /api/v1/ (current) are supported for compatibility
-app.use('/api/datasets',       requireAuth({ allowGuest: true }), datasetRoutes);
-app.use('/api/rules',          requireAuth({ allowGuest: true }), ruleRoutes);
-app.use('/api/issues',         requireAuth({ allowGuest: true }), issueRoutes);
-app.use('/api/remediation',    requireAuth({ allowGuest: true }), remediationRoutes);
+// BUG FIX: guests may read (GET), but all write operations require a valid JWT.
+// Each domain router internally guards its own mutation endpoints.
+app.use('/api/datasets',       datasetRoutes);
+app.use('/api/rules',          ruleRoutes);
+app.use('/api/issues',         issueRoutes);
+app.use('/api/remediation',    requireAuth(), remediationRoutes);
 app.use('/api/eval',           requireAuth({ allowGuest: true }), evalRoutes);
 
 // Versioned aliases — /api/v1/
-app.use('/api/v1/datasets',    requireAuth({ allowGuest: true }), datasetRoutes);
-app.use('/api/v1/rules',       requireAuth({ allowGuest: true }), ruleRoutes);
-app.use('/api/v1/issues',      requireAuth({ allowGuest: true }), issueRoutes);
-app.use('/api/v1/remediation', requireAuth({ allowGuest: true }), remediationRoutes);
+app.use('/api/v1/datasets',    datasetRoutes);
+app.use('/api/v1/rules',       ruleRoutes);
+app.use('/api/v1/issues',      issueRoutes);
+app.use('/api/v1/remediation', requireAuth(), remediationRoutes);
 app.use('/api/v1/eval',        requireAuth({ allowGuest: true }), evalRoutes);
 
 // ── Model Context Protocol ────────────────────────────────────────────────
@@ -126,8 +151,10 @@ app.get('/api/mcp/tools', (_req, res) => {
   res.json({ success: true, tools: mcpToolDefinitions });
 });
 
+// BUG FIX: MCP /call requires authentication — prevents unauthenticated tool execution
 app.post(
   '/api/mcp/call',
+  requireAuth(),
   asyncHandler(async (req, res) => {
     const { toolName, args = {} } = req.body;
 

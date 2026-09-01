@@ -27,13 +27,14 @@ import { MatcherService }            from '../services/matcher.service.js';
 import { RemediationService }        from '../services/remediation.service.js';
 import { cache }             from '../cache/redisClient.js';
 import { asyncHandler }      from '../middleware/asyncHandler.js';
+import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import logger                from '../config/logger.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // ── GET /api/datasets ────────────────────────────────────────────────────
-/** Returns all datasets sorted by creation date. */
+/** Returns all datasets sorted by creation date. Public (guests can view). */
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
@@ -46,9 +47,14 @@ router.get(
 );
 
 // ── POST /api/datasets/seed ──────────────────────────────────────────────
-/** Resets and re-seeds the two default enterprise datasets. */
+/**
+ * Resets and re-seeds the two default enterprise datasets.
+ * BUG 4 FIX: Requires admin role — previously had no auth guard.
+ */
 router.post(
   '/seed',
+  requireAuth(),
+  requireRole('admin'),
   asyncHandler(async (_req, res) => {
     store.initDefaultSeed();
     await cache.delPattern('profile:*');
@@ -174,6 +180,7 @@ router.get(
  */
 router.post(
   '/:id/scan',
+  requireAuth(),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -301,6 +308,7 @@ router.post(
 /** Ingests a CSV file, auto-profiles it, and registers it as a new dataset. */
 router.post(
   '/upload',
+  requireAuth(),
   upload.single('file'),
   asyncHandler(async (req, res) => {
     if (!req.file) {

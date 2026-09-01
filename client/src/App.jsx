@@ -47,6 +47,7 @@ import {
   enterGuestMode,
 }                            from './store/authSlice.js';
 import { apiGet }            from './store/api.js';
+import { isAdminEmail }      from './config/adminEmails.js';
 
 // ---------------------------------------------------------------------------
 // Socket singleton
@@ -55,7 +56,8 @@ let _socketInstance = null;
 
 function getSocket() {
   if (!_socketInstance) {
-    _socketInstance = io(import.meta.env.VITE_API_BASE_URL ?? '', {
+    // BUG 7 FIX: was VITE_API_BASE_URL (undefined) — correct var is VITE_API_URL
+    _socketInstance = io(import.meta.env.VITE_API_URL ?? '', {
       path:              '/socket.io',
       reconnectionDelay: 1000,
       transports:        ['websocket', 'polling'],
@@ -290,8 +292,7 @@ export function App() {
         const payload    = JSON.parse(atob(payloadB64));
 
         const emailClean = (payload.email || '').toLowerCase().trim();
-        const isAdmin = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com'].includes(emailClean);
-        const role = isAdmin ? 'admin' : (payload.role ?? 'steward');
+        const role = isAdminEmail(emailClean) ? 'admin' : (payload.role ?? 'steward');
 
         dispatch(setTokenFromUrl({
           token,

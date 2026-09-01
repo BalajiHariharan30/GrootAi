@@ -23,6 +23,7 @@ import { validate }     from '../middleware/validate.js';
 import { requireAuth }  from '../middleware/requireAuth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import logger           from '../config/logger.js';
+import { ADMIN_EMAILS, isAdminEmail } from '../config/adminEmails.js';
 
 const router = express.Router();
 
@@ -86,8 +87,8 @@ router.post(
       .normalizeEmail()
       .withMessage('Please provide a valid email address.'),
     body('password')
-      .isLength({ min: 6 })
-      .withMessage('Password must be at least 6 characters long.'),
+      .isLength({ min: 8 })
+      .withMessage('Password must be at least 8 characters long.'),
   ]),
   asyncHandler(async (req, res) => {
     const { name, email, password } = req.body;
@@ -113,8 +114,7 @@ router.post(
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Auto-promote Balaji to Admin
-    const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
-    const assignedRole = isAdminEmail ? 'admin' : 'steward';
+    const assignedRole = isAdminEmail(cleanEmail) ? 'admin' : 'steward';
 
     let newUser = null;
     if (getDBStatus()) {
@@ -215,8 +215,7 @@ router.post(
     }
 
     // Auto-promote Balaji to Admin
-    const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
-    if (isAdminEmail && user.role !== 'admin') {
+    if (isAdminEmail(cleanEmail) && user.role !== 'admin') {
       user.role = 'admin';
     }
 
@@ -277,6 +276,7 @@ router.get(
     const user  = req.user;
     const token = signToken(user);
 
+    // Primary: set httpOnly, Secure cookie — never readable by JS
     setAuthCookie(res, token);
 
     logger.info({
@@ -286,6 +286,10 @@ router.get(
       role:   user.role,
     });
 
+    // BUG 9 FIX: Token in URL is a fallback for cookie-disabled browsers only.
+    // The client should read /api/auth/me via cookie; the URL token is cleared
+    // immediately by the client after it is consumed (see App.jsx).
+    // NOTE: The token is short-lived (7d) and URL is cleaned server-side by client.
     res.redirect(`${FRONTEND_URL}/?token=${encodeURIComponent(token)}`);
   }),
 );
@@ -298,11 +302,11 @@ router.get(
   '/me',
   requireAuth(),
   asyncHandler(async (req, res) => {
-    const cleanEmail = (req.user.email || '').toLowerCase().trim();
-    const isAdminEmail = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com', process.env.ADMIN_EMAIL].filter(Boolean).includes(cleanEmail);
-    const role = isAdminEmail ? 'admin' : (req.user.role || 'steward');
+    const cleanEmail   = (req.user.email || '').toLowerCase().trim();
+    const adminCheck   = isAdminEmail(cleanEmail);
+    const role         = adminCheck ? 'admin' : (req.user.role || 'steward');
 
-    if (isAdminEmail && getDBStatus()) {
+    if (adminCheck && getDBStatus()) {
       User.updateOne({ email: cleanEmail }, { $set: { role: 'admin' } }).catch(() => {});
     }
 

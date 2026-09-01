@@ -19,6 +19,7 @@ import { MatcherService }        from '../services/matcher.service.js';
 import { AIClient }              from '../ai/aiClient.js';
 import { cache }                 from '../cache/redisClient.js';
 import { asyncHandler }          from '../middleware/asyncHandler.js';
+import { requireAuth }           from '../middleware/requireAuth.js';
 import { validate }              from '../middleware/validate.js';
 import logger                    from '../config/logger.js';
 
@@ -88,9 +89,16 @@ router.get(
       ? String(pageData[pageData.length - 1]._id)
       : null;
 
-    const totalOpen = store.issues.filter(
-      (i) => String(i.datasetId) === String(datasetId) && i.status === 'open',
-    ).length;
+    // BUG 5 FIX: query MongoDB for open count when DB is active — was incorrectly
+    // reading store.issues (always empty in MongoDB mode) returning 0 always.
+    let totalOpen;
+    if (getDBStatus()) {
+      totalOpen = await Issue.countDocuments({ datasetId, status: 'open' });
+    } else {
+      totalOpen = store.issues.filter(
+        (i) => String(i.datasetId) === String(datasetId) && i.status === 'open',
+      ).length;
+    }
 
     const response = {
       success: true,
@@ -198,6 +206,7 @@ router.get(
 /** Marks a single issue as dismissed (soft-delete). */
 router.post(
   '/:id/dismiss',
+  requireAuth(),
   validate([param('id').notEmpty().withMessage('issueId required')]),
   asyncHandler(async (req, res) => {
     const { id } = req.params;

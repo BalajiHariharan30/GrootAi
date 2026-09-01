@@ -21,6 +21,7 @@ import { RemediationService }        from '../services/remediation.service.js';
 import { LearningService }           from '../services/learning.service.js';
 import { cache }                     from '../cache/redisClient.js';
 import { asyncHandler }              from '../middleware/asyncHandler.js';
+import { requireAuth, requireRole }  from '../middleware/requireAuth.js';
 import { validate }                  from '../middleware/validate.js';
 import logger                        from '../config/logger.js';
 
@@ -175,6 +176,7 @@ router.get(
  */
 router.post(
   '/:id/approve',
+  requireRole('steward'),
   validate([
     param('id').notEmpty().withMessage('Remediation id required'),
     body('approver').optional().isString(),
@@ -281,6 +283,7 @@ router.post(
  */
 router.post(
   '/:id/reject',
+  requireRole('steward'),
   validate([
     param('id').notEmpty().withMessage('Remediation id required'),
     body('reason').optional().isString(),
@@ -344,6 +347,7 @@ router.post(
  */
 router.post(
   '/:id/rollback',
+  requireRole('admin'),
   validate([
     param('id').notEmpty().withMessage('Remediation id required'),
     body('rolledBackBy').optional().isString(),

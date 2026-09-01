@@ -26,6 +26,7 @@ import { AIClient }               from '../ai/aiClient.js';
 import { RuleEngineService }      from '../services/ruleEngine.service.js';
 import { cache }                  from '../cache/redisClient.js';
 import { asyncHandler }           from '../middleware/asyncHandler.js';
+import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { validate }               from '../middleware/validate.js';
 import logger                     from '../config/logger.js';
 
@@ -210,6 +211,8 @@ router.get(
  */
 router.post(
   '/:id/activate',
+  requireAuth(),
+  requireRole('steward'),
   validate([
     param('id').notEmpty().withMessage('Rule id required'),
   ]),

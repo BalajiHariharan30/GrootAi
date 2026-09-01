@@ -12,6 +12,7 @@
  */
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiGet, apiPost, apiFetch, storeToken, clearToken, getStoredToken } from './api.js';
+import { ADMIN_EMAILS } from '../config/adminEmails.js';
 
 export { getStoredToken, storeToken, clearToken };
 export const authHeaders = () => {
@@ -59,7 +60,7 @@ export const logoutUser = createAsyncThunk(
   },
 );
 
-const ADMIN_EMAILS = ['balaji.hdev@gmail.com', 'h.balaji1964@gmail.com'];
+// DRY: uses shared ADMIN_EMAILS from config/adminEmails.js instead of inline array
 const sanitizeUser = (user) => {
   if (!user) return user;
   const email = (user.email || '').toLowerCase().trim();
