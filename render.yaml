@@ -28,3 +28,8 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
+      # Gap 4 fix: these were missing — required for PII field encryption and admin whitelist
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false

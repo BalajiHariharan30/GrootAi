@@ -187,11 +187,21 @@ export const RuleComposerPage = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
               Natural Language Rule Studio
             </h1>
             <StatusBadge label="Agentic Tool Use" variant="info" dot pulse />
+            {/* AI mode pill — shows which engine is active */}
+            {candidateRule?.aiMode === 'claude' ? (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                ✦ Claude 3.5 Sonnet
+              </span>
+            ) : candidateRule?.aiMode === 'ast_parser' ? (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-700 text-slate-300 border border-slate-600">
+                ⚙ Grounded AST Engine
+              </span>
+            ) : null}
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Express business data quality rules in plain English. Constrained AI

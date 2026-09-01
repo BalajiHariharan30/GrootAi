@@ -50,6 +50,7 @@ const inFlightRequests = new Map();
  */
 router.post(
   '/parse',
+  requireAuth(),          // Gap 1 fix: prevent unauthenticated AI calls burning API quota
   validate([
     body('naturalLanguageInput')
       .trim()
@@ -106,6 +107,11 @@ router.post(
     }
 
     const aiPromise = (async () => {
+      // Gap 3 fix: track which engine produced the rule so frontend can show 'Claude AI' vs 'AST Parser'
+      const hasRealApiKey = process.env.ANTHROPIC_API_KEY
+        && !process.env.ANTHROPIC_API_KEY.includes('your_')
+        && process.env.ANTHROPIC_API_KEY.length > 20;
+
       const parsedAST = await AIClient.parseNLToStructuredRule(naturalLanguageInput, columns);
 
       // Execute-Before-Trust validation
@@ -123,10 +129,12 @@ router.post(
         structuredRule:      parsedAST.structuredRule,
         status:              'pending_review',
         validationSample,
+        // Gap 3 fix: tell the UI which engine was used
+        aiMode: hasRealApiKey ? 'claude' : 'ast_parser',
       };
 
       await cache.set(cacheKey, candidateRule, 86_400); // 24 h TTL
-      logger.info({ event: 'rule_parse_success', name: parsedAST.name, passRate: validationSample.passRate });
+      logger.info({ event: 'rule_parse_success', name: parsedAST.name, passRate: validationSample.passRate, aiMode: candidateRule.aiMode });
       return candidateRule;
     })();
 
