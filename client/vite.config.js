@@ -18,6 +18,9 @@ export default defineConfig({
     }
   },
   build: {
+    target: 'es2020',               // Modern browsers only — smaller output, no legacy polyfills
+    cssCodeSplit: true,             // Per-page CSS — only loads what the current page needs
+    assetsInlineLimit: 4096,        // Inline small assets (<4KB) as base64 to save HTTP requests
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {

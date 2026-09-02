@@ -38,8 +38,14 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 router.get(
   '/',
   asyncHandler(async (_req, res) => {
+    // Cache-Control: serve fresh for 30s, allow stale up to 5min while revalidating
+    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
     if (getDBStatus()) {
-      const datasets = await Dataset.find().sort({ createdAt: -1 });
+      // lean() returns plain JS objects — ~3x faster than full Mongoose documents
+      const datasets = await Dataset.find()
+        .select('-profile.history -__v')   // exclude large history array from list view
+        .sort({ createdAt: -1 })
+        .lean();
       return res.json({ success: true, data: datasets });
     }
     res.json({ success: true, data: store.datasets });

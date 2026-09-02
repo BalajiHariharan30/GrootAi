@@ -18,6 +18,7 @@
 import express          from 'express';
 import cors             from 'cors';
 import helmet           from 'helmet';
+import compression      from 'compression';
 import cookieParser     from 'cookie-parser';
 import dotenv           from 'dotenv';
 
@@ -55,14 +56,18 @@ const app = express();
 // ---------------------------------------------------------------------------
 
 // ── Security Headers (helmet) ──────────────────────────────────────────────
-// helmet sets X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security,
-// X-XSS-Protection, etc. — free, production-standard, no config required.
 app.use(
   helmet({
-    crossOriginEmbedderPolicy: false, // Allow Vite dev server embeds in dev
-    contentSecurityPolicy: false,      // Managed by Vercel/CDN in production
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false,
   }),
 );
+
+// ── Gzip Compression (~70% smaller JSON payloads) ─────────────────────────
+app.use(compression({ level: 6, threshold: 1024 })); // only compress > 1KB
+
+// ── ETag Support (browser cache validation — 0ms on cache hit) ────────────
+app.set('etag', 'strong');
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
