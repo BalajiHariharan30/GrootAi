@@ -176,6 +176,19 @@ app.post(
   }),
 );
 
+// ── Health Check (/api/health) ────────────────────────────────────────────
+// Used by Render for uptime monitoring — must return 200 to avoid restarts
+app.get('/api/health', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    status:   'ok',
+    uptime:   Math.round(process.uptime()),
+    db:       getDBStatus() ? 'mongodb' : 'in-memory',
+    memoryMb: parseFloat((process.memoryUsage().rss / 1024 / 1024).toFixed(1)),
+    ts:       new Date().toISOString(),
+  });
+});
+
 // ── 404 ───────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
