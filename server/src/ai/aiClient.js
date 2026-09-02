@@ -208,17 +208,35 @@ User Rule: "${nlInput}"
     const text = nlInput.toLowerCase();
     const columnNames = columns.map(c => c.name);
 
-    // Find referenced columns by prioritizing longest exact/token match
+    // Find referenced columns by prioritizing longest exact token match with word boundaries or camelCase match
     const sortedCols = [...columnNames].sort((a, b) => b.length - a.length);
     let targetField = null;
 
-    for (const col of sortedCols) {
-      const lower = col.toLowerCase();
-      // split camelCase e.g. shippingCountry -> shipping country, customerEmail -> customer email
-      const spaced = col.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
-      if (text.includes(lower) || text.includes(spaced)) {
-        targetField = col;
-        break;
+    // First check semantic aliases
+    if (text.includes('order amount') || text.includes('total amount') || text.includes('order total')) {
+      targetField = columnNames.find(c => ['totalamount', 'total_amount', 'orderamount', 'amount'].includes(c.toLowerCase())) || targetField;
+    }
+
+    if (!targetField) {
+      for (const col of sortedCols) {
+        const lower = col.toLowerCase();
+        const spaced = col.replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+        const wordRegex = new RegExp(`\\b${lower}\\b`, 'i');
+        const spacedRegex = new RegExp(`\\b${spaced}\\b`, 'i');
+        if (wordRegex.test(text) || spacedRegex.test(text)) {
+          targetField = col;
+          break;
+        }
+      }
+    }
+
+    if (!targetField) {
+      for (const col of sortedCols) {
+        const lower = col.toLowerCase();
+        if (text.includes(lower)) {
+          targetField = col;
+          break;
+        }
       }
     }
 
@@ -263,9 +281,9 @@ User Rule: "${nlInput}"
     }
 
     // 2b. Indian GSTIN / PAN / TaxId validation
-    if (text.includes('gstin') || text.includes('gst') || text.includes('pan') || text.includes('taxid') || text.includes('tax id')) {
+    if (/\bgstin\b|\bgst\b|\bpan\b|\btaxid\b|\btax id\b/i.test(text)) {
       const taxField = columnNames.find(c => ['taxid', 'gstin', 'pan', 'tax_id', 'gst_number'].includes(c.toLowerCase())) || targetField;
-      if (text.includes('gstin') || text.includes('gst')) {
+      if (/\bgstin\b|\bgst\b/i.test(text)) {
         conditions.push({
           field: taxField,
           operator: 'regex',
@@ -273,7 +291,7 @@ User Rule: "${nlInput}"
           description: 'GSTIN must conform to 15-character Indian GST format (e.g. 29ABCDE1234F1Z5)'
         });
         category = 'validity';
-      } else if (text.includes('pan')) {
+      } else if (/\bpan\b/i.test(text)) {
         conditions.push({
           field: taxField,
           operator: 'regex',
@@ -367,11 +385,11 @@ User Rule: "${nlInput}"
       category = 'uniqueness';
     }
 
-    // 8. In set / allowed values (e.g. "status must be active, suspended, or pending")
-    const setMatch = text.match(/(?:must be|one of|in)\s*\[?([a-zA-Z0-9_,\s/]+)\]?/i);
-    if (setMatch && (text.includes('status') || text.includes('type') || text.includes('tier') || text.includes('country') || text.includes('state') || text.includes('city'))) {
+    // 8. In set / allowed values (e.g. "status must be active, suspended, or pending", "currency must be one of USD, EUR, GBP")
+    const setMatch = text.match(/(?:must be|one of|in)\s*(?:one of\s*)?\[?([a-zA-Z0-9_,\s/]+)\]?/i);
+    if (setMatch) {
       const allowed = setMatch[1].split(/,|\bor\b|\band\b/).map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
-      if (allowed.length > 1) {
+      if (allowed.length > 1 && !text.includes('between') && !text.includes('positive')) {
         conditions.push({
           field: targetField,
           operator: 'in_set',
