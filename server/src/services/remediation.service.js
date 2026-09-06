@@ -21,10 +21,11 @@ export class RemediationService {
    * 3. Sanitizes PII before processing.
    */
   static async proposeFix(issue, record) {
-    const ruleEngineIface = buildRuleEngineInterface(RuleEngineService);
+    const calibrationMap = await LearningService.getCalibrationMap();
+    const ruleEngineIface = buildRuleEngineInterface(RuleEngineService, calibrationMap);
     const sanitized = PIIRedactor.sanitizeRecordForLLM(record, issue.field);
 
-    // If ambiguous or low-confidence, route through LangGraph + RAG state machine
+    // If ambiguous or calibrated confidence is low (< 0.85), route through LangGraph + RAG state machine
     if (shouldUseAgent(issue, sanitized, ruleEngineIface)) {
       try {
         const graph = await buildRemediationGraph({
@@ -67,9 +68,15 @@ export class RemediationService {
       }
     }
 
-    // High-confidence deterministic path (or graceful fallback)
-    const calibrationMap = await LearningService.getCalibrationMap();
+    // High-confidence deterministic path (calibrated)
     const proposal = AIClient.generateRemediationProposal(issue, sanitized, calibrationMap);
+
+    // GAP 2 FIX: 5% Canary Spot-Check
+    // Randomly select 5% of high-confidence fast-path proposals for explicit audit flagging
+    const isCanary = Math.random() < 0.05;
+    const canaryNote = isCanary
+      ? ' [CANARY SPOT-CHECK: Selected for empirical quality audit]'
+      : '';
 
     return {
       issueId:        issue._id,
@@ -79,18 +86,22 @@ export class RemediationService {
       targetField:    proposal.targetField,
       strategy:       proposal.strategy,
       proposedFix:    proposal.proposedFix,
-      agentReasoning: proposal.agentReasoning,
+      agentReasoning: `${proposal.agentReasoning}${canaryNote}`,
       confidence:     proposal.confidence,
       status:         'proposed',
-      agentEngine:    'Deterministic Rule Engine (Calibrated)',
+      isCanarySpotCheck: isCanary,
+      agentEngine:    isCanary
+        ? 'Deterministic Rule Engine (Canary Spot-Check Audit)'
+        : 'Deterministic Rule Engine (Calibrated)',
       auditLog: [{
-        action:    'PROPOSAL_GENERATED',
+        action:    isCanary ? 'CANARY_SPOT_CHECK_QUEUED' : 'PROPOSAL_GENERATED',
         timestamp: new Date(),
         actor:     'GrootAi Remediation Engine',
-        details:   `Generated fix proposal using strategy '${proposal.strategy}' with ${(proposal.confidence * 100).toFixed(0)}% confidence (calibrated from human feedback history).`,
+        details:   `Generated fix proposal using strategy '${proposal.strategy}' with ${(proposal.confidence * 100).toFixed(0)}% confidence (empirically calibrated).${canaryNote}`,
       }],
     };
   }
+
 
   /**
    * Batch proposes fixes for up to 50 issues in a single operation.

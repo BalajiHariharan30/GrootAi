@@ -27,8 +27,8 @@ import {
   PATCH_RESPONSE_SCHEMA,
 } from "./promptTemplates.js";
 
-export const MAX_RETRIES = 2;
-export const MIN_RAG_SCORE = 0.45;
+export const MAX_RETRIES = 1; // Maximum 1 retry, strictly reserved for formatting/citation misalignments
+export const MIN_RAG_SCORE = 0.50; // Filter out tangential/weak vector matches early
 export const AGENT_CONFIDENCE_THRESHOLD = 0.85;
 
 export const RemediationState = Annotation.Root({
@@ -44,9 +44,9 @@ export const RemediationState = Annotation.Root({
 /**
  * Wire this to real deterministic engine.
  */
-export function buildRuleEngineInterface(ruleEngineService) {
+export function buildRuleEngineInterface(ruleEngineService, calibrationMap = null) {
   return {
-    getConfidence: (issue, record) => ruleEngineService.getConfidence(issue, record),
+    getConfidence: (issue, record) => ruleEngineService.getConfidence(issue, record, calibrationMap),
     validatePatch: (issue, record, proposedValue) =>
       ruleEngineService.validatePatch(issue, record, proposedValue),
   };
@@ -58,14 +58,42 @@ export function shouldUseAgent(issue, record, ruleEngineIface, { confidenceThres
   return confidence < confidenceThreshold;
 }
 
-export function verifyCitations(citedChunkIds, ragContext) {
-  const validIds = new Set([
-    ...(ragContext?.specChunks || []).map((c) => c.id),
-    ...(ragContext?.decisionChunks || []).map((c) => c.id),
-  ]);
-  const bad = (citedChunkIds || []).filter((id) => !validIds.has(id));
-  return { ok: bad.length === 0, invalidIds: bad };
+/**
+ * GAP 3 FIX: Verify both Existence AND Semantic Support.
+ * Ensures cited chunks actually exist AND explicitly pertain to the issue field.
+ */
+export function verifyCitations(citedChunkIds, ragContext, issue = null) {
+  const allRetrieved = [
+    ...(ragContext?.specChunks || []),
+    ...(ragContext?.decisionChunks || []),
+  ];
+  const validMap = new Map(allRetrieved.map((c) => [c.id, c]));
+
+  // 1. Existence check
+  const bad = (citedChunkIds || []).filter((id) => !validMap.has(id));
+  if (bad.length > 0) {
+    return { ok: false, invalidIds: bad, reason: "Cited chunk ID was not in retrieved context" };
+  }
+
+  // 2. Semantic Support & Relevance check:
+  // If issue is provided, verify that at least one cited chunk matches the target field
+  if (issue && issue.field && citedChunkIds?.length > 0) {
+    const hasFieldMatch = citedChunkIds.some((id) => {
+      const chunk = validMap.get(id);
+      return chunk?.metadata?.field === issue.field || chunk?.text?.toLowerCase().includes(issue.field.toLowerCase());
+    });
+    if (!hasFieldMatch) {
+      return {
+        ok: false,
+        invalidIds: citedChunkIds,
+        reason: `Cited chunks do not pertain to target field '${issue.field}'`,
+      };
+    }
+  }
+
+  return { ok: true, invalidIds: [] };
 }
+
 
 export async function buildRemediationGraph({ ruleEngineService, ragStore, onCommit, checkpointer }) {
   const ruleEngineIface = buildRuleEngineInterface(ruleEngineService);
@@ -154,13 +182,13 @@ export async function buildRemediationGraph({ ruleEngineService, ragStore, onCom
         return { candidateFix: result, status: "ABSTAINED" };
       }
 
-      const citationCheck = verifyCitations(result.citedChunkIds, state.ragContext);
+      const citationCheck = verifyCitations(result.citedChunkIds, state.ragContext, state.issue);
       if (!citationCheck.ok) {
         return {
           candidateFix: result,
           validationResult: {
             valid: false,
-            error: `Cited chunk id(s) not found in retrieved context: ${citationCheck.invalidIds.join(", ")}. Only cite ids that were actually provided.`,
+            error: `Citation check failed: ${citationCheck.reason || 'Invalid citations'} [${(citationCheck.invalidIds || []).join(", ")}].`,
           },
           status: "CITATION_INVALID",
         };
@@ -193,13 +221,32 @@ export async function buildRemediationGraph({ ruleEngineService, ragStore, onCom
     };
   }
 
-  // --- Routing after verification: retry, abstain, or proceed ---
+  // --- GAP 4 FIX: Selective Retry vs. Instant Abstain ---
+  // Formatting/citation errors: allow up to 1 retry.
+  // Semantic rule validation failure: DO NOT retry (prevents model from rationalizing loopholes).
   function routeAfterVerify(state) {
-    if (state.status === "VALIDATED") return "stewardGate";
-    if (state.status === "ABSTAINED") return "stewardGate";
-    if (state.retryCount >= MAX_RETRIES) return "stewardGate";
-    return "incrementRetry";
+    if (state.status === "VALIDATED" || state.status === "ABSTAINED") {
+      return "stewardGate";
+    }
+
+    // Semantic rule violation -> abstain immediately; do not loop
+    if (state.status === "VALIDATION_FAILED") {
+      state.candidateFix = {
+        status: "ABSTAIN",
+        rationale: `Proposed fix failed domain validation: ${state.validationResult?.error}. Terminating search without guessing.`,
+      };
+      state.status = "ABSTAINED";
+      return "stewardGate";
+    }
+
+    // Formatting / citation misalignment: allow at most 1 retry
+    if (state.status === "CITATION_INVALID" && state.retryCount < MAX_RETRIES) {
+      return "incrementRetry";
+    }
+
+    return "stewardGate";
   }
+
 
   function incrementRetry(state) {
     return { retryCount: state.retryCount + 1, status: "RETRYING" };

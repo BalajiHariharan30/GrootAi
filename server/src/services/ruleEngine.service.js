@@ -264,31 +264,49 @@ export class RuleEngineService {
 
   /**
    * Evaluates how confident the deterministic engine already is about an issue.
-   * Return 0..1. If confidence is >= AGENT_CONFIDENCE_THRESHOLD, the issue
-   * can be resolved deterministically without invoking the LLM+RAG agent.
+   * Calibrates raw heuristic confidence against real human approval rates from LearningService.
+   * If historical approvals for this issue type are low, confidence automatically drops,
+   * routing the issue to the AI agent or human inspection.
+   *
+   * @param {object} issue
+   * @param {object} record
+   * @param {object} [calibrationMap] - e.g. { [issueType]: { [strategy]: rate } }
+   * @returns {number} Calibrated confidence score between 0.0 and 1.0
    */
-  static getConfidence(issue, record) {
+  static getConfidence(issue, record, calibrationMap = null) {
     const field = issue.field;
     const rawVal = record?.data?.[field] ?? record?.[field] ?? issue.currentValue;
 
-    // Direct null/empty issues have high deterministic confidence
+    let rawScore = 0.65;
+
+    // Direct null/empty issues
     if (rawVal === null || rawVal === undefined || String(rawVal).trim() === '') {
-      return 0.95;
+      rawScore = 0.95;
+    } else {
+      const str = String(rawVal);
+      // Well-known domain typos
+      if (str.includes('@@') || str.includes('..') || str.endsWith('@gmai.com')) {
+        rawScore = 0.92;
+      } else if (issue.type === 'format_error' || issue.type === 'violation' || issue.type === 'outlier') {
+        rawScore = 0.50;
+      }
     }
 
-    // Well-known domain typos (e.g. @@ or ..) have high confidence
-    const str = String(rawVal);
-    if (str.includes('@@') || str.includes('..') || str.endsWith('@gmai.com')) {
-      return 0.92;
+    // Calibrate against empirical human steward outcomes if available
+    const issueType = issue.type || issue.issueType || 'unknown';
+    if (calibrationMap && calibrationMap[issueType]) {
+      const rates = Object.values(calibrationMap[issueType]);
+      if (rates.length > 0) {
+        // Average empirical approval rate for this issue category
+        const avgApprovalRate = rates.reduce((sum, r) => sum + r, 0) / rates.length;
+        // Calibrated score = raw heuristic * empirical approval rate
+        return +(rawScore * avgApprovalRate).toFixed(3);
+      }
     }
 
-    // Complex formatting, missing prefixes, ambiguous tax IDs have lower confidence
-    if (issue.type === 'format_error' || issue.type === 'violation' || issue.type === 'outlier') {
-      return 0.50;
-    }
-
-    return 0.65;
+    return rawScore;
   }
+
 
   /**
    * Deterministically validates a proposed patch value before it can reach a steward.

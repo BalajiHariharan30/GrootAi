@@ -440,13 +440,21 @@ router.post(
       }
     }
 
+    // GAP 6 FIX: Blast-Radius Calculation
+    const elapsedMs = remediation.appliedAt ? Date.now() - new Date(remediation.appliedAt).getTime() : 0;
+    const elapsedHours = (elapsedMs / (1000 * 60 * 60)).toFixed(1);
+    const hasBlastRadius = elapsedMs > 60 * 60 * 1000; // > 1 hour
+    const blastRadiusWarning = hasBlastRadius
+      ? `CAUTION: Mutation was applied ${elapsedHours} hours ago. Downstream ETL pipelines, syncs, or analytics models may have already consumed the mutated value. Downstream reconciliation may be required.`
+      : null;
+
     // Update remediation status and append rollback audit entry
     remediation.status = 'rolled_back';
     remediation.auditLog.push({
       action:    'HUMAN_ROLLBACK_EXECUTED',
       timestamp: new Date(),
       actor:     rolledBackBy,
-      details:   `Rollback executed by ${rolledBackBy}. Reason: ${reason}. Value restored to: '${remediation.proposedFix?.beforeValue}'.`,
+      details:   `Rollback executed by ${rolledBackBy}. Reason: ${reason}. Value restored to: '${remediation.proposedFix?.beforeValue}'.${blastRadiusWarning ? ` [${blastRadiusWarning}]` : ''}`,
     });
 
     if (getDBStatus()) await remediation.save();
@@ -456,12 +464,24 @@ router.post(
     await cache.delPattern(`records:${remediation.datasetId}:*`);
     await cache.delPattern('issues:*');
 
-    logger.info({
-      event:         'remediation_rolled_back',
-      remediationId: String(remediation._id),
+    // GAP 6 FIX: Broadcast Domain Event
+    const rollbackDomainEvent = {
+      event:            'RECORD_MUTATION_ROLLED_BACK',
+      remediationId:    String(remediation._id),
+      datasetId:        String(remediation.datasetId),
+      recordId:         String(remediation.recordId),
+      targetField:      remediation.targetField,
+      restoredValue:    remediation.proposedFix?.beforeValue,
+      invalidatedValue: remediation.proposedFix?.afterValue,
       rolledBackBy,
       reason,
-    });
+      appliedAt:        remediation.appliedAt,
+      rolledBackAt:     new Date(),
+      elapsedHours:     parseFloat(elapsedHours),
+      blastRadiusWarning,
+    };
+
+    logger.warn(rollbackDomainEvent);
 
     // ── Continuous Learning: record rollback as negative signal ────────────
     await LearningService.recordFeedback({
@@ -477,11 +497,14 @@ router.post(
 
     res.json({
       success: true,
-      message: `Rollback complete — value restored to original. Audit entry recorded.`,
+      message: `Rollback complete — value restored to original. Audit entry recorded.${blastRadiusWarning ? ' ' + blastRadiusWarning : ''}`,
       data:    remediation,
+      blastRadiusWarning,
+      broadcastEvent: rollbackDomainEvent,
     });
   }),
 );
+
 
 
 // ── GET /api/remediation/:id/explain ─────────────────────────────────────

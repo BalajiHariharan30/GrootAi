@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @module ragStore
  * @description Dual-tier semantic chunk store:
  *   Tier A: schema_spec     -> policy / field specifications
@@ -73,7 +73,7 @@ export class InMemoryRagStore {
   }
 
   /**
-   * Insert or update a chunk.
+   * Insert or update a chunk with conflict resolution and consensus gating.
    * @param {{id:string, category:'schema_spec'|'decision_memory', text:string, metadata:object}} chunk
    */
   async upsertChunk(chunk) {
@@ -81,9 +81,57 @@ export class InMemoryRagStore {
       throw new Error("upsertChunk requires id, text, and category");
     }
     const vector = await this._getEmbedding(chunk.text, "RETRIEVAL_DOCUMENT");
+    const now = Date.now();
+
+    // GAP 5 FIX: Precedent Conflict Resolution & Consensus Gating
+    if (chunk.category === "decision_memory") {
+      const field = chunk.metadata?.field;
+      const outcome = chunk.metadata?.outcome;
+
+      // When a new rejection arrives, soft-tombstone any contradicting approved chunk for the same field/value
+      if (outcome === "rejected" && field) {
+        for (const [existingId, existingChunk] of this.chunks.entries()) {
+          if (
+            existingChunk.category === "decision_memory" &&
+            existingChunk.metadata?.field === field &&
+            existingChunk.metadata?.outcome === "approved"
+          ) {
+            // Check if this approved chunk recommended what was just rejected
+            const rejectedVal = String(chunk.metadata?.proposedFix || "").trim().toLowerCase();
+            const approvedVal = String(existingChunk.metadata?.approvedFix || "").trim().toLowerCase();
+            if (rejectedVal && approvedVal && (rejectedVal === approvedVal || dot(vector, existingChunk.vector) > 0.85)) {
+              existingChunk.status = "contradicted";
+              existingChunk.contradictedAt = now;
+              existingChunk.contradictedBy = chunk.id;
+            }
+          }
+        }
+      }
+
+      // When an approval arrives, check if it corroborates an existing approved precedent (consensus gating)
+      if (outcome === "approved" && field) {
+        for (const existingChunk of this.chunks.values()) {
+          if (
+            existingChunk.category === "decision_memory" &&
+            existingChunk.metadata?.field === field &&
+            existingChunk.metadata?.outcome === "approved" &&
+            existingChunk.status !== "contradicted"
+          ) {
+            if (dot(vector, existingChunk.vector) > 0.90) {
+              existingChunk.confirmations = (existingChunk.confirmations || 1) + 1;
+              existingChunk.lastConfirmedAt = now;
+            }
+          }
+        }
+      }
+    }
+
     this.chunks.set(chunk.id, {
       ...chunk,
       vector,
+      createdAt: chunk.createdAt || now,
+      confirmations: chunk.confirmations || 1,
+      status: chunk.status || "active",
     });
     return chunk.id;
   }
@@ -96,19 +144,26 @@ export class InMemoryRagStore {
     const texts = chunks.map((c) => c.text);
     const vectors = await this._getBatchEmbeddings(texts, "RETRIEVAL_DOCUMENT");
     chunks.forEach((c, i) => {
-      this.chunks.set(c.id, { ...c, vector: vectors[i] });
+      this.chunks.set(c.id, {
+        ...c,
+        vector: vectors[i],
+        createdAt: Date.now(),
+        confirmations: 1,
+        status: "active",
+      });
     });
     return chunks.map((c) => c.id);
   }
 
   /**
-   * Metadata pre-filter.
+   * Metadata pre-filter — excludes contradicted/tombstoned chunks.
    */
   _preFilter(filter) {
+    const all = Array.from(this.chunks.values()).filter((c) => c.status !== "contradicted");
     if (!filter || Object.keys(filter).length === 0) {
-      return Array.from(this.chunks.values());
+      return all;
     }
-    return Array.from(this.chunks.values()).filter((c) =>
+    return all.filter((c) =>
       Object.entries(filter).every(([k, v]) => {
         if (!v) return true;
         return c.metadata?.[k] === v;
@@ -117,7 +172,7 @@ export class InMemoryRagStore {
   }
 
   /**
-   * Vector similarity search with metadata pre-filtering.
+   * Vector similarity search with metadata pre-filtering, time decay, and consensus weighting.
    */
   async search(queryText, options = {}) {
     const { filter = {}, topK = 3, category } = options;
@@ -128,14 +183,29 @@ export class InMemoryRagStore {
     if (candidates.length === 0) return [];
 
     const queryVec = await this._getEmbedding(queryText, "RETRIEVAL_QUERY");
+    const now = Date.now();
 
-    const scored = candidates.map((c) => ({
-      id: c.id,
-      category: c.category,
-      text: c.text,
-      metadata: c.metadata,
-      score: dot(queryVec, c.vector),
-    }));
+    const scored = candidates.map((c) => {
+      const rawCosine = dot(queryVec, c.vector);
+
+      // Recency decay: half-life of 180 days (older decisions gradually decay)
+      const ageInDays = Math.max(0, (now - (c.createdAt || now)) / (1000 * 60 * 60 * 24));
+      const recencyFactor = Math.exp(-ageInDays / 180);
+
+      // Consensus weighting: corroborate precedents with >=2 confirmations receive a 15% confidence boost
+      const consensusMultiplier = (c.confirmations && c.confirmations >= 2) ? 1.15 : 1.0;
+
+      const effectiveScore = +(rawCosine * recencyFactor * consensusMultiplier).toFixed(4);
+
+      return {
+        id: c.id,
+        category: c.category,
+        text: c.text,
+        metadata: c.metadata,
+        confirmations: c.confirmations || 1,
+        score: effectiveScore,
+      };
+    });
 
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, topK);
@@ -154,11 +224,11 @@ export class InMemoryRagStore {
 export const ragStore = new InMemoryRagStore();
 
 /**
- * Retrieve grounding context for a flagged issue, split by tier:
- *   - top 1 schema/policy spec matching the field
- *   - top 2 past approved decisions matching the field + issueType
+ * Retrieve grounding context for a flagged issue, split by tier.
+ * Raised minScore to 0.65 (or 0.50 for local offline pseudo-embeddings)
+ * to ensure only truly relevant, high-affinity policy and precedents are returned.
  */
-export async function retrieveRemediationContext(store, issue, { minScore = 0.45 } = {}) {
+export async function retrieveRemediationContext(store, issue, { minScore = 0.50 } = {}) {
   const query = issue.description || `${issue.field} ${issue.issueType || issue.type}`;
 
   const [specHits, decisionHits] = await Promise.all([
@@ -179,3 +249,4 @@ export async function retrieveRemediationContext(store, issue, { minScore = 0.45
     decisionChunks: decisionHits.filter((h) => h.score >= minScore),
   };
 }
+

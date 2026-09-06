@@ -114,6 +114,58 @@ export async function embedText(texts, opts = {}) {
  * @param {number} [params.temperature=0]
  * @returns {Promise<object>} parsed JSON matching responseSchema
  */
+/**
+ * GAP 7 FIX: Multi-Provider LLM Gateway with Automated Failover.
+ * If Gemini fails, rate limits, or times out, attempts secondary provider
+ * (OpenAI-compatible: Groq, Mistral, or Ollama) before erroring.
+ */
+async function callFallbackProvider({ systemInstruction, userPrompt, responseSchema, temperature }) {
+  const fallbackKey = process.env.FALLBACK_LLM_API_KEY || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
+  const fallbackUrl = process.env.FALLBACK_LLM_URL || (process.env.GROQ_API_KEY ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions");
+  const fallbackModel = process.env.FALLBACK_LLM_MODEL || (process.env.GROQ_API_KEY ? "llama-3.3-70b-versatile" : "gpt-4o-mini");
+
+  if (!fallbackKey) return null;
+
+  const res = await fetchWithTimeout(fallbackUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${fallbackKey}`,
+    },
+    body: JSON.stringify({
+      model: fallbackModel,
+      temperature,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: `${systemInstruction}\nRespond with JSON conforming to: ${JSON.stringify(responseSchema)}` },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+  }, 10000);
+
+  if (!res.ok) {
+    throw new Error(`Fallback provider call failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  const rawContent = data?.choices?.[0]?.message?.content;
+  if (!rawContent) throw new Error("Fallback provider returned no content");
+  return JSON.parse(rawContent);
+}
+
+/**
+ * Generate a structured, schema-constrained patch proposal.
+ * Primary: Gemini 2.0 Flash Lite.
+ * Secondary: Automated failover to secondary LLM provider.
+ *
+ * @param {object} params
+ * @param {string} params.systemInstruction
+ * @param {string} params.userPrompt
+ * @param {object} params.responseSchema - JSON schema the model MUST follow
+ * @param {number} [params.temperature=0]
+ * @returns {Promise<object>} parsed JSON matching responseSchema
+ */
 export async function generatePatch({ systemInstruction, userPrompt, responseSchema, temperature = 0 }) {
   assertConfigured();
 
@@ -134,28 +186,47 @@ export async function generatePatch({ systemInstruction, userPrompt, responseSch
     },
   };
 
-  const res = await fetchWithRetry(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Gemini generation call failed (${res.status}): ${errText}`);
-  }
-
-  const data = await res.json();
-  const textPart = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!textPart) {
-    throw new Error("Gemini returned no candidate text — treat as generation failure, not a fix.");
-  }
-
   try {
+    const res = await fetchWithRetry(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`Gemini generation call failed (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const textPart = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!textPart) {
+      throw new Error("Gemini returned no candidate text — treat as generation failure.");
+    }
+
     return JSON.parse(textPart);
-  } catch (e) {
-    throw new Error(`Gemini response was not valid JSON despite schema constraint: ${e.message}`);
+  } catch (primaryErr) {
+    console.warn(`[LLM Gateway] Primary Gemini provider failed (${primaryErr.message}). Attempting automated failover...`);
+
+    // GAP 7 FIX: Attempt fallback provider
+    try {
+      const fallbackResult = await callFallbackProvider({
+        systemInstruction,
+        userPrompt,
+        responseSchema,
+        temperature,
+      });
+      if (fallbackResult) {
+        console.log("[LLM Gateway] Automated failover to secondary provider succeeded.");
+        return fallbackResult;
+      }
+    } catch (fallbackErr) {
+      console.warn(`[LLM Gateway] Fallback provider also failed: ${fallbackErr.message}`);
+    }
+
+    throw primaryErr;
   }
 }
+
 
