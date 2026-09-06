@@ -119,40 +119,53 @@ export async function embedText(texts, opts = {}) {
  * If Gemini fails, rate limits, or times out, attempts secondary provider
  * (OpenAI-compatible: Groq, Mistral, or Ollama) before erroring.
  */
+/**
+ * GAP 7 FIX: Multi-Provider LLM Gateway with Groq LPU Automated Failover.
+ * Primary: Google Gemini 2.0 Flash Lite.
+ * Fallback: Groq Cloud (llama-3.3-70b-versatile) — ultra-fast LPU inference (500+ tok/s).
+ */
 async function callFallbackProvider({ systemInstruction, userPrompt, responseSchema, temperature }) {
-  const fallbackKey = process.env.FALLBACK_LLM_API_KEY || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
-  const fallbackUrl = process.env.FALLBACK_LLM_URL || (process.env.GROQ_API_KEY ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions");
-  const fallbackModel = process.env.FALLBACK_LLM_MODEL || (process.env.GROQ_API_KEY ? "llama-3.3-70b-versatile" : "gpt-4o-mini");
+  const groqKey = process.env.GROQ_API_KEY || process.env.FALLBACK_LLM_API_KEY || process.env.OPENAI_API_KEY;
+  if (!groqKey || groqKey.includes("your_")) return null;
 
-  if (!fallbackKey) return null;
+  const groqUrl = process.env.GROQ_BASE_URL || process.env.FALLBACK_LLM_URL || "https://api.groq.com/openai/v1/chat/completions";
+  const groqModel = process.env.GROQ_MODEL || process.env.FALLBACK_LLM_MODEL || "llama-3.3-70b-versatile";
 
-  const res = await fetchWithTimeout(fallbackUrl, {
+  console.log(`[LLM Gateway] Initiating Groq LPU fallback with model '${groqModel}'...`);
+
+  const res = await fetchWithTimeout(groqUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${fallbackKey}`,
+      "Authorization": `Bearer ${groqKey}`,
     },
     body: JSON.stringify({
-      model: fallbackModel,
+      model: groqModel,
       temperature,
       max_tokens: MAX_OUTPUT_TOKENS,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: `${systemInstruction}\nRespond with JSON conforming to: ${JSON.stringify(responseSchema)}` },
+        {
+          role: "system",
+          content: `${systemInstruction}\nOutput must strictly be valid JSON following this schema:\n${JSON.stringify(responseSchema)}`,
+        },
         { role: "user", content: userPrompt },
       ],
     }),
   }, 10000);
 
   if (!res.ok) {
-    throw new Error(`Fallback provider call failed (${res.status})`);
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Groq API call failed (${res.status}): ${errBody}`);
   }
 
   const data = await res.json();
   const rawContent = data?.choices?.[0]?.message?.content;
-  if (!rawContent) throw new Error("Fallback provider returned no content");
+  if (!rawContent) throw new Error("Groq returned empty completion content");
+
   return JSON.parse(rawContent);
 }
+
 
 /**
  * Generate a structured, schema-constrained patch proposal.
