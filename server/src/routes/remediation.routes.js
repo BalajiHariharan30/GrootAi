@@ -19,6 +19,7 @@ import { store }                     from '../data/inMemoryStore.js';
 import { getDBStatus }               from '../config/db.js';
 import { RemediationService }        from '../services/remediation.service.js';
 import { LearningService }           from '../services/learning.service.js';
+import { ragStore }                  from '../ai/ragStore.js';
 import { cache }                     from '../cache/redisClient.js';
 import { asyncHandler }              from '../middleware/asyncHandler.js';
 import { requireAuth, requireRole }  from '../middleware/requireAuth.js';
@@ -267,9 +268,27 @@ router.post(
       confidence:    remediation.confidence,
     });
 
+    // ── RAG Vector Memorization: store live approved precedent ─────────────
+    try {
+      await ragStore.upsertChunk({
+        id: `decision_${remediation.targetField}_${Date.now()}`,
+        category: 'decision_memory',
+        text: `Issue: ${issue?.type ?? 'format_error'} on field '${remediation.targetField}' with raw value '${remediation.proposedFix?.beforeValue}'. Strategy: ${remediation.strategy}. Approved Fix: '${remediation.proposedFix?.afterValue}'.`,
+        metadata: {
+          field:       remediation.targetField,
+          issueType:   issue?.type ?? 'format_error',
+          strategy:    remediation.strategy,
+          approvedFix: remediation.proposedFix?.afterValue,
+          outcome:     'approved',
+        },
+      });
+    } catch (ragErr) {
+      logger.warn({ event: 'rag_memorization_warning', error: ragErr.message });
+    }
+
     res.json({
       success: true,
-      message: 'Mutation applied — audit log entry recorded.',
+      message: 'Mutation applied — audit log entry recorded and memorized in RAG.',
       data:    remediation,
     });
   }),
