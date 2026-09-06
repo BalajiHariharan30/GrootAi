@@ -129,7 +129,8 @@ async function callFallbackProvider({ systemInstruction, userPrompt, responseSch
   if (!groqKey || groqKey.includes("your_")) return null;
 
   const groqUrl = process.env.GROQ_BASE_URL || process.env.FALLBACK_LLM_URL || "https://api.groq.com/openai/v1/chat/completions";
-  const groqModel = process.env.GROQ_MODEL || process.env.FALLBACK_LLM_MODEL || "llama-3.3-70b-versatile";
+  const groqModel = process.env.GROQ_MODEL || process.env.FALLBACK_LLM_MODEL || "openai/gpt-oss-120b";
+
 
   console.log(`[LLM Gateway] Initiating Groq LPU fallback with model '${groqModel}'...`);
 
