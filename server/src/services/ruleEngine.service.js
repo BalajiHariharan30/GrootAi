@@ -261,4 +261,75 @@ export class RuleEngineService {
 
     return violations;
   }
+
+  /**
+   * Evaluates how confident the deterministic engine already is about an issue.
+   * Return 0..1. If confidence is >= AGENT_CONFIDENCE_THRESHOLD, the issue
+   * can be resolved deterministically without invoking the LLM+RAG agent.
+   */
+  static getConfidence(issue, record) {
+    const field = issue.field;
+    const rawVal = record?.data?.[field] ?? record?.[field] ?? issue.currentValue;
+
+    // Direct null/empty issues have high deterministic confidence
+    if (rawVal === null || rawVal === undefined || String(rawVal).trim() === '') {
+      return 0.95;
+    }
+
+    // Well-known domain typos (e.g. @@ or ..) have high confidence
+    const str = String(rawVal);
+    if (str.includes('@@') || str.includes('..') || str.endsWith('@gmai.com')) {
+      return 0.92;
+    }
+
+    // Complex formatting, missing prefixes, ambiguous tax IDs have lower confidence
+    if (issue.type === 'format_error' || issue.type === 'violation' || issue.type === 'outlier') {
+      return 0.50;
+    }
+
+    return 0.65;
+  }
+
+  /**
+   * Deterministically validates a proposed patch value before it can reach a steward.
+   * Tests the proposed value against the active rule/operator syntax.
+   * @returns {{ valid: boolean, error?: string }}
+   */
+  static validatePatch(issue, record, proposedValue) {
+    if (proposedValue === null || proposedValue === undefined || String(proposedValue).trim() === '') {
+      return { valid: false, error: 'Proposed value cannot be empty or null' };
+    }
+
+    const field = issue.field || '';
+    const strVal = String(proposedValue).trim();
+
+    // Validate email format if target is email
+    if (field.toLowerCase().includes('email')) {
+      const emailCondition = { field, operator: 'email_valid' };
+      const ok = this.evaluateCondition(emailCondition, { [field]: strVal });
+      if (!ok) return { valid: false, error: `Proposed value "${strVal}" is not a valid RFC email` };
+    }
+
+    // Validate phone format if target is phone
+    if (field.toLowerCase().includes('phone') || field.toLowerCase().includes('mobile')) {
+      const phoneCondition = { field, operator: 'phone_valid' };
+      const ok = this.evaluateCondition(phoneCondition, { [field]: strVal });
+      if (!ok) return { valid: false, error: `Proposed value "${strVal}" does not satisfy telecomm phone standards` };
+    }
+
+    // Validate tax ID format if target is taxId/gstin/pan
+    if (field.toLowerCase().includes('tax') || field.toLowerCase().includes('gst')) {
+      const gstinCondition = {
+        field,
+        operator: 'regex',
+        pattern: '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$',
+      };
+      // Allow general enterprise formats or Indian GSTIN
+      if (strVal.length === 15 && !this.evaluateCondition(gstinCondition, { [field]: strVal })) {
+        return { valid: false, error: `Proposed value "${strVal}" violates 15-char GSTIN checksum/format` };
+      }
+    }
+
+    return { valid: true };
+  }
 }

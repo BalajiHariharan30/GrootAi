@@ -1,19 +1,74 @@
 import { AIClient, PIIRedactor } from '../ai/aiClient.js';
 import { LearningService }        from './learning.service.js';
+import { RuleEngineService }      from './ruleEngine.service.js';
+import { ragStore }               from '../ai/ragStore.js';
+import {
+  buildRemediationGraph,
+  shouldUseAgent,
+  buildRuleEngineInterface,
+}                                 from '../ai/remediationGraph.js';
 import { cache }                  from '../cache/redisClient.js';
 
 export class RemediationService {
   /**
    * Generates a remediation action proposal for a flagged issue.
-   * Fetches the calibration map from LearningService so that AI confidence
-   * scores are informed by real historical human approval rates.
-   * Sanitizes PII before processing.
+   *
+   * Flow:
+   * 1. Check confidence gate via `shouldUseAgent`. If ruleEngine is already confident,
+   *    uses deterministic rule generation for maximum speed and zero token cost.
+   * 2. If confidence is ambiguous or issue is complex, invokes LangGraph with RAG context
+   *    retrieval and Execute-Before-Trust verification.
+   * 3. Sanitizes PII before processing.
    */
   static async proposeFix(issue, record) {
-    // Load the live calibration map (cached for 5 min inside LearningService)
-    const calibrationMap = await LearningService.getCalibrationMap();
+    const ruleEngineIface = buildRuleEngineInterface(RuleEngineService);
     const sanitized = PIIRedactor.sanitizeRecordForLLM(record, issue.field);
 
+    // If ambiguous or low-confidence, route through LangGraph + RAG state machine
+    if (shouldUseAgent(issue, sanitized, ruleEngineIface)) {
+      try {
+        const graph = buildRemediationGraph({
+          ruleEngineService: RuleEngineService,
+          ragStore,
+        });
+
+        const threadId = String(issue._id || issue.id || Date.now());
+        const graphResult = await graph.invoke(
+          { issue, record: sanitized },
+          { configurable: { thread_id: threadId } }
+        );
+
+        if (graphResult.candidateFix && graphResult.candidateFix.status === 'PROPOSED') {
+          const fix = graphResult.candidateFix;
+          const cited = fix.citedChunkIds?.length ? ` [Citations: ${fix.citedChunkIds.join(', ')}]` : '';
+          return {
+            issueId:        issue._id,
+            datasetId:      issue.datasetId,
+            recordId:       issue.recordId,
+            rowNumber:      issue.rowNumber,
+            targetField:    issue.field,
+            strategy:       fix.strategy || 'agentic_rag_patch',
+            proposedFix:    fix.proposedValue,
+            agentReasoning: `${fix.rationale || 'Synthesized and validated via LangGraph agent.'}${cited}`,
+            confidence:     fix.confidence || 0.90,
+            status:         'proposed',
+            citedChunkIds:  fix.citedChunkIds || [],
+            agentEngine:    'LangGraph + Dual-Tier RAG',
+            auditLog: [{
+              action:    'PROPOSAL_GENERATED',
+              timestamp: new Date(),
+              actor:     'GrootAi LangGraph Agent',
+              details:   `Synthesized fix via LangGraph RAG with ${(Number(fix.confidence || 0.9) * 100).toFixed(0)}% confidence.${cited}`,
+            }],
+          };
+        }
+      } catch (err) {
+        console.warn(`[RemediationService] LangGraph execution fallback: ${err.message}`);
+      }
+    }
+
+    // High-confidence deterministic path (or graceful fallback)
+    const calibrationMap = await LearningService.getCalibrationMap();
     const proposal = AIClient.generateRemediationProposal(issue, sanitized, calibrationMap);
 
     return {
@@ -27,10 +82,11 @@ export class RemediationService {
       agentReasoning: proposal.agentReasoning,
       confidence:     proposal.confidence,
       status:         'proposed',
+      agentEngine:    'Deterministic Rule Engine (Calibrated)',
       auditLog: [{
         action:    'PROPOSAL_GENERATED',
         timestamp: new Date(),
-        actor:     'GrootAi Remediation Agent',
+        actor:     'GrootAi Remediation Engine',
         details:   `Generated fix proposal using strategy '${proposal.strategy}' with ${(proposal.confidence * 100).toFixed(0)}% confidence (calibrated from human feedback history).`,
       }],
     };

@@ -45,6 +45,11 @@ export const RemediationProposalCard = ({ proposal, onApprove, onReject, isProce
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 uppercase">
                 {strategyLabels[strategy] || strategy}
               </span>
+              {proposal.agentEngine && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-900/30 text-violet-300 border border-violet-700/50">
+                  ✦ {proposal.agentEngine}
+                </span>
+              )}
             </div>
             <span className="text-[11px] text-slate-400">Target Field: <span className="font-mono text-slate-300 font-bold">{targetField}</span></span>
           </div>

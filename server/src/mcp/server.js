@@ -7,6 +7,7 @@ import { Record }               from '../models/Record.js';
 import { RuleEngineService }    from '../services/ruleEngine.service.js';
 import { MatcherService }       from '../services/matcher.service.js';
 import { RemediationService }   from '../services/remediation.service.js';
+import { ragStore }             from '../ai/ragStore.js';
 
 export const mcpToolDefinitions = [
   {
@@ -51,6 +52,20 @@ export const mcpToolDefinitions = [
       required: ['datasetId'],
     },
   },
+  {
+    name: 'search_knowledge_base',
+    description: 'Semantic vector search across enterprise data specifications and past steward remediation decisions (RAG)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Semantic search text e.g. email format or taxId' },
+        field: { type: 'string', description: 'Optional field filter e.g. phone or email' },
+        category: { type: 'string', enum: ['schema_spec', 'decision_memory'] },
+        topK: { type: 'number', default: 3 }
+      },
+      required: ['query']
+    }
+  }
 ];
 
 // Helper: resolve a document from MongoDB or in-memory store
@@ -116,6 +131,23 @@ export async function handleMCPToolCall(toolName, args) {
         qualityScore: dataset.qualityScore,
         dimensions:   dataset.dimensions,
         columns:      dataset.profile?.columns,
+      };
+    }
+
+    case 'search_knowledge_base': {
+      const { query, field, category, topK = 3 } = args;
+      const filter = field ? { field } : {};
+      const hits = await ragStore.search(query, { filter, category, topK });
+      return {
+        query,
+        count: hits.length,
+        results: hits.map((h) => ({
+          id: h.id,
+          category: h.category,
+          score: parseFloat(h.score.toFixed(3)),
+          text: h.text,
+          metadata: h.metadata,
+        })),
       };
     }
 

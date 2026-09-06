@@ -13,6 +13,9 @@
     "format": "prettier --write src"
   },
   "dependencies": {
+    "@langchain/langgraph": "^1.4.14",
+    "@langchain/langgraph-checkpoint": "^1.1.5",
+    "@langchain/langgraph-checkpoint-mongodb": "^1.4.1",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
