@@ -94,34 +94,50 @@ export class RemediationService {
 
   /**
    * Batch proposes fixes for up to 50 issues in a single operation.
+   * Routes each issue through proposeFix() (confidence gate -> LangGraph + RAG -> AST fallback)
+   * with a concurrency pool of 5 to protect LLM rate limits and token budgets.
    */
   static async proposeBatchFixes(items) {
-    const calibrationMap = await LearningService.getCalibrationMap();
-    const batchResults = await AIClient.generateBatchRemediations(items, calibrationMap);
+    const CONCURRENCY = 5;
+    const results = [];
 
-    return batchResults.map(({ issueId, proposal }) => {
-      const originalItem = items.find((i) => String(i.issue._id) === String(issueId));
-      const issue = originalItem?.issue;
-      return {
-        issueId:        issue?._id ?? issueId,
-        datasetId:      issue?.datasetId,
-        recordId:       issue?.recordId,
-        rowNumber:      issue?.rowNumber,
-        targetField:    proposal.targetField,
-        strategy:       proposal.strategy,
-        proposedFix:    proposal.proposedFix,
-        agentReasoning: proposal.agentReasoning,
-        confidence:     proposal.confidence,
-        status:         'proposed',
-        auditLog: [{
-          action:    'PROPOSAL_GENERATED',
-          timestamp: new Date(),
-          actor:     'GrootAi Batch Remediation Agent',
-          details:   `Batch-generated fix proposal using strategy '${proposal.strategy}' with ${(proposal.confidence * 100).toFixed(0)}% confidence.`,
-        }],
-      };
-    });
+    for (let i = 0; i < items.length; i += CONCURRENCY) {
+      const chunk = items.slice(i, i + CONCURRENCY);
+      const chunkProposals = await Promise.all(
+        chunk.map(async ({ issue, record }) => {
+          try {
+            return await this.proposeFix(issue, record);
+          } catch (err) {
+            // Deterministic AST fallback if agent fails
+            const calibrationMap = await LearningService.getCalibrationMap();
+            const fallback = await AIClient.generateRemediationProposal(issue, record, calibrationMap);
+            return {
+              issueId:        issue._id,
+              datasetId:      issue.datasetId,
+              recordId:       issue.recordId,
+              rowNumber:      issue.rowNumber,
+              targetField:    fallback.targetField,
+              strategy:       fallback.strategy,
+              proposedFix:    fallback.proposedFix,
+              agentReasoning: fallback.agentReasoning,
+              confidence:     fallback.confidence,
+              status:         'proposed',
+              auditLog: [{
+                action:    'PROPOSAL_GENERATED',
+                timestamp: new Date(),
+                actor:     'GrootAi AST Fallback Agent',
+                details:   `Batch fallback proposal: ${fallback.strategy}`,
+              }],
+            };
+          }
+        })
+      );
+      results.push(...chunkProposals);
+    }
+
+    return results;
   }
+
 
   /**
    * Applies approved remediation patch to the underlying record

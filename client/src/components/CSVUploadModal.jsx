@@ -43,6 +43,26 @@ export const CSVUploadModal = ({ isOpen, onClose }) => {
       });
       if (!ok || !data?.success) throw new Error(data?.error || 'Upload failed');
 
+      // If background job enqueued, poll until complete
+      if (data.jobId) {
+        let completed = false;
+        let attempts = 0;
+        while (!completed && attempts < 60) {
+          await new Promise((r) => setTimeout(r, 1000));
+          attempts++;
+          const { ok: sOk, data: sData } = await apiFetch(`/api/jobs/${data.jobId}/status`);
+          if (sOk && sData?.data) {
+            if (sData.data.status === 'completed') {
+              completed = true;
+              break;
+            }
+            if (sData.data.status === 'failed') {
+              throw new Error(sData.data.error || 'Dataset processing failed');
+            }
+          }
+        }
+      }
+
       dispatch(fetchDatasets());
       if (data.data?._id) {
         dispatch(fetchDatasetProfile(data.data._id));
@@ -54,6 +74,7 @@ export const CSVUploadModal = ({ isOpen, onClose }) => {
       setUploading(false);
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-950/80 backdrop-blur-md">

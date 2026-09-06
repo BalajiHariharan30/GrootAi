@@ -37,10 +37,36 @@ export const seedDatasets = createAsyncThunk('datasets/seed', async (_, { dispat
 export const triggerScan = createAsyncThunk('datasets/scan', async (datasetId, { dispatch, rejectWithValue }) => {
   const { ok, data } = await apiFetch(`/api/datasets/${datasetId}/scan`, { method: 'POST' });
   if (!ok) return rejectWithValue(data?.error ?? 'Scan failed');
+
+  // If async job was enqueued (BullMQ or in-memory async), poll until complete
+  if (data?.jobId) {
+    let completed = false;
+    let attempts = 0;
+    while (!completed && attempts < 60) {
+      await new Promise((r) => setTimeout(r, 1000));
+      attempts++;
+      const { ok: statusOk, data: jobData } = await apiGet(`/api/jobs/${data.jobId}/status`);
+      if (statusOk && jobData?.data) {
+        const job = jobData.data;
+        if (job.status === 'completed') {
+          completed = true;
+          break;
+        }
+        if (job.status === 'failed') {
+          return rejectWithValue(job.error || 'Scan job failed');
+        }
+        if (typeof job.progress === 'number') {
+          dispatch(datasetSlice.actions.setScanProgress(`Analyzing dataset... ${job.progress}%`));
+        }
+      }
+    }
+  }
+
   dispatch(fetchDatasetProfile(datasetId));
   dispatch(fetchDatasets());
   return data;
 });
+
 
 export const fetchLatestEval = createAsyncThunk('datasets/fetchLatestEval', async (_, { rejectWithValue }) => {
   const { ok, data } = await apiGet('/api/eval/latest');
