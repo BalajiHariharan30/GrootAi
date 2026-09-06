@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @module promptTemplates
  * @description Anti-hallucination prompt templates and JSON schemas for remediation.
  * Rules:
@@ -17,13 +17,17 @@ STRICT RULES:
 - Do not explain your reasoning in prose outside the JSON fields provided.
 - Output must strictly conform to the provided JSON schema.`;
 
+/** Hard cap per chunk to keep prompt token budget small. */
+const CHUNK_TEXT_LIMIT = 160;
+const trim = (text) => text.length > CHUNK_TEXT_LIMIT ? text.slice(0, CHUNK_TEXT_LIMIT) + "…" : text;
+
 export function buildPatchUserPrompt({ issue, record, specChunks, decisionChunks, priorValidationError }) {
   const specSection = specChunks.length
-    ? specChunks.map((c) => `[${c.id}] ${c.text}`).join("\n")
+    ? specChunks.map((c) => `[${c.id}] ${trim(c.text)}`).join("\n")
     : "(none retrieved)";
 
   const decisionSection = decisionChunks.length
-    ? decisionChunks.map((c) => `[${c.id}] ${c.text}`).join("\n")
+    ? decisionChunks.map((c) => `[${c.id}] ${trim(c.text)}`).join("\n")
     : "(none retrieved)";
 
   const retrySection = priorValidationError
@@ -46,6 +50,7 @@ ${decisionSection}
 ${retrySection}
 Propose a fix for this issue, grounded strictly in the context above.`;
 }
+
 
 export const PATCH_RESPONSE_SCHEMA = {
   type: "object",

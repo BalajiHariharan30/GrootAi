@@ -27,7 +27,7 @@ export class RemediationService {
     // If ambiguous or low-confidence, route through LangGraph + RAG state machine
     if (shouldUseAgent(issue, sanitized, ruleEngineIface)) {
       try {
-        const graph = buildRemediationGraph({
+        const graph = await buildRemediationGraph({
           ruleEngineService: RuleEngineService,
           ragStore,
         });

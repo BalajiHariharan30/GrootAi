@@ -1,24 +1,28 @@
-﻿/**
+/**
  * @module geminiClient
  * @description Wrapper around Google's Gemini API for embedding and generation.
  * Responsibilities:
  *   1. embedText()     -> gemini-embedding-001 (vector search / RAG)
- *   2. generatePatch() -> gemini-3-flash (reasoning / synthesis)
+ *   2. generatePatch() -> gemini-2.0-flash-lite (reasoning / synthesis — minimal token cost)
  *
- * Anti-hallucination & safety guarantees:
- * - Model IDs are pinned (never "-latest" aliases).
- * - Forces temperature 0 and strict JSON response schema.
- * - Requires grounding context; callers cannot generate patches ungrounded.
+ * Token-saving guarantees:
+ * - maxOutputTokens capped at 256 (patches are tiny JSON objects).
+ * - temperature=0 (deterministic, no sampling overhead).
+ * - Pinned model IDs — never "-latest" aliases.
  * - Graceful fallback if GEMINI_API_KEY is not configured or offline.
  */
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
+// gemini-embedding-001 is the recommended batch embedding model (free tier).
+// gemini-2.0-flash-lite is the lowest-cost generation model — perfect for
+// structured JSON outputs like short patch proposals.
 export const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
-export const GENERATION_MODEL = process.env.GEMINI_GENERATION_MODEL || "gemini-3-flash";
+export const GENERATION_MODEL = process.env.GEMINI_GENERATION_MODEL || "gemini-2.0-flash-lite";
 
 const DEFAULT_TIMEOUT_MS = 15000;
+const MAX_OUTPUT_TOKENS  = 256; // patches are tiny — cap spend hard
 
 export function isGeminiConfigured() {
   return Boolean(
@@ -47,6 +51,20 @@ async function fetchWithTimeout(url, options, timeoutMs = DEFAULT_TIMEOUT_MS) {
   }
 }
 
+/** Retry once on 429 rate-limit with exponential back-off (1 s then 3 s). */
+async function fetchWithRetry(url, options, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const delays = [1000, 3000];
+  let lastRes;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    lastRes = await fetchWithTimeout(url, options, timeoutMs);
+    if (lastRes.status !== 429) return lastRes;
+    if (attempt < delays.length) {
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+  }
+  return lastRes;
+}
+
 /**
  * Embed one or more strings into vectors.
  * Batches internally to reduce round trips.
@@ -70,7 +88,7 @@ export async function embedText(texts, opts = {}) {
     })),
   };
 
-  const res = await fetchWithTimeout(url, {
+  const res = await fetchWithRetry(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -110,12 +128,13 @@ export async function generatePatch({ systemInstruction, userPrompt, responseSch
     contents: [{ role: "user", parts: [{ text: userPrompt }] }],
     generationConfig: {
       temperature,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
       responseMimeType: "application/json",
       responseSchema,
     },
   };
 
-  const res = await fetchWithTimeout(url, {
+  const res = await fetchWithRetry(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -139,3 +158,4 @@ export async function generatePatch({ systemInstruction, userPrompt, responseSch
     throw new Error(`Gemini response was not valid JSON despite schema constraint: ${e.message}`);
   }
 }
+

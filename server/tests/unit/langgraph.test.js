@@ -164,7 +164,7 @@ describe('Full LangGraph State Machine Execution', () => {
     ]);
 
     let committed = false;
-    const graph = buildRemediationGraph({
+    const graph = await buildRemediationGraph({
       ruleEngineService: RuleEngineService,
       ragStore: store,
       onCommit: async () => { committed = true; }

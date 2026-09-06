@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @module remediationGraph
  * @description LangGraph.js state machine implementing the 5-node remediation flow.
  *
@@ -18,6 +18,7 @@
 
 import { StateGraph, Annotation, interrupt, START, END } from "@langchain/langgraph";
 import { MemorySaver } from "@langchain/langgraph-checkpoint";
+import { MongoDBSaver } from "@langchain/langgraph-checkpoint-mongodb";
 import { generatePatch, isGeminiConfigured } from "./geminiClient.js";
 import { retrieveRemediationContext } from "./ragStore.js";
 import {
@@ -66,7 +67,7 @@ export function verifyCitations(citedChunkIds, ragContext) {
   return { ok: bad.length === 0, invalidIds: bad };
 }
 
-export function buildRemediationGraph({ ruleEngineService, ragStore, onCommit, checkpointer }) {
+export async function buildRemediationGraph({ ruleEngineService, ragStore, onCommit, checkpointer }) {
   const ruleEngineIface = buildRuleEngineInterface(ruleEngineService);
 
   // --- Node 1: RAG Context Retrieval ---
@@ -270,7 +271,26 @@ export function buildRemediationGraph({ ruleEngineService, ragStore, onCommit, c
     .addEdge("stewardGate", "commitAndMemorize")
     .addEdge("commitAndMemorize", END);
 
-  const activeCheckpointer = checkpointer || new MemorySaver();
+  // Prefer persistent MongoDBSaver so state survives server restarts.
+  // Falls back to MemorySaver for local dev or if MongoDB isn't available.
+  let activeCheckpointer = checkpointer;
+  if (!activeCheckpointer) {
+    const mongoUri = process.env.MONGODB_URI;
+    if (mongoUri) {
+      try {
+        activeCheckpointer = await MongoDBSaver.fromConnString(mongoUri, {
+          dbName: "grootai",
+          collectionName: "langgraph_checkpoints",
+        });
+      } catch (err) {
+        console.warn(`[LangGraph] MongoDBSaver init failed (${err.message}). Falling back to MemorySaver.`);
+        activeCheckpointer = new MemorySaver();
+      }
+    } else {
+      activeCheckpointer = new MemorySaver();
+    }
+  }
 
   return graph.compile({ checkpointer: activeCheckpointer });
 }
+

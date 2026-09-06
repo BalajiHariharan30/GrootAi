@@ -347,6 +347,23 @@ router.post(
       confidence:    remediation.confidence,
     });
 
+    // ── RAG Anti-Precedent: store rejected fix so agent avoids repeating it ─
+    try {
+      await ragStore.upsertChunk({
+        id: `rejected_${remediation.targetField}_${Date.now()}`,
+        category: 'decision_memory',
+        text: `REJECTED: Issue on field '${remediation.targetField}'. Proposed fix '${remediation.proposedFix?.afterValue}' was REJECTED by steward. Reason: ${reason}. Do NOT repeat this fix.`,
+        metadata: {
+          field:     remediation.targetField,
+          issueType: remediation.strategy,
+          strategy:  remediation.strategy,
+          outcome:   'rejected',
+        },
+      });
+    } catch (ragErr) {
+      logger.warn({ event: 'rag_rejection_memorization_warning', error: ragErr.message });
+    }
+
     res.json({
       success: true,
       message: 'Rejection recorded in audit trail.',
