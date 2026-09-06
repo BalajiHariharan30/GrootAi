@@ -14,6 +14,8 @@ import { Server as SocketIOServer } from 'socket.io';
 import app                   from './app.js';
 import { connectDB }         from './config/db.js';
 import { seedRagStore }      from './ai/ragSeeder.js';
+import { initJobQueue, closeJobQueue } from './jobs/jobQueue.js';
+import { processScanJob, processUploadJob } from './jobs/scanProcessor.js';
 import logger                from './config/logger.js';
 
 const PORT        = Number(process.env.PORT)        || 5000;
@@ -64,6 +66,7 @@ export const emitIssueAlert = (datasetId, issue) => {
 async function start() {
   await connectDB();
   await seedRagStore();
+  await initJobQueue({ processScanJob, processUploadJob });
 
   server.listen(PORT, () => {
     logger.info({
@@ -111,6 +114,9 @@ function shutdown(signal) {
     logger.info({ event: 'shutdown_complete', signal });
     process.exit(0);
   });
+
+  // Close BullMQ worker + queue gracefully
+  closeJobQueue().catch(() => {});
 
   // Disconnect all Socket.io clients gracefully
   io.close(() => {

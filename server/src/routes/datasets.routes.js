@@ -181,8 +181,9 @@ router.get(
 
 // ── POST /api/datasets/:id/scan ──────────────────────────────────────────
 /**
- * Full DQ scan: re-profiles dataset, runs active rules, runs deduplication.
- * Returns issue count, quality score delta, and schema drift summary.
+ * Enqueues a full DQ scan job and returns immediately with a jobId.
+ * Heavy work (profiling + rule scan + dedup + AI proposals) runs in BullMQ worker.
+ * Poll GET /api/jobs/:jobId/status for progress (0-100) and final results.
  */
 router.post(
   '/:id/scan',
@@ -190,128 +191,44 @@ router.post(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    let dataset = null;
-    let records = [];
-    let rules   = [];
-
+    // Quick existence check before enqueuing
+    let exists = false;
     if (getDBStatus()) {
-      dataset = await Dataset.findById(id);
-      records = await Record.find({ datasetId: id });
-      rules   = await Rule.find({ datasetId: id, status: 'active' });
+      exists = Boolean(await Dataset.exists({ _id: id }));
     } else {
-      dataset = store.datasets.find((d) => String(d._id) === String(id));
-      records = store.records.filter((r) => String(r.datasetId) === String(id));
-      rules   = store.rules.filter((r) =>
-        String(r.datasetId) === String(id) && r.status === 'active',
-      );
+      exists = store.datasets.some((d) => String(d._id) === String(id));
     }
+    if (!exists) return res.status(404).json({ success: false, error: 'Dataset not found' });
 
-    if (!dataset) return res.status(404).json({ success: false, error: 'Dataset not found' });
+    const { enqueueJob }      = await import('../jobs/jobQueue.js');
+    const { processScanJob }  = await import('../jobs/scanProcessor.js');
 
-    // Step 1: Re-profile
-    const newProfile = ProfilerService.profileRecords(records);
-    const drift      = ProfilerService.diffProfiles(dataset.profile, newProfile);
+    const jobId = await enqueueJob(
+      'scan',
+      { datasetId: id },
+      processScanJob,   // fallback fn for local dev (no Redis)
+    );
 
-    // Step 2: Run active rules
-    const allViolations = [];
-    for (const rule of rules) {
-      const violations = RuleEngineService.runRuleOnDataset(rule, records);
-      allViolations.push(...violations);
-    }
+    logger.info({ event: 'scan_enqueued', datasetId: id, jobId });
 
-    // Step 3: Deduplication
-    const duplicateIssues = MatcherService.scanDatasetForDuplicates(id, records);
-    const combinedIssues  = [...allViolations, ...duplicateIssues];
-
-    // Mark records
-    const issueRecordIds = new Set(combinedIssues.map((i) => String(i.recordId)));
-    records.forEach((r) => {
-      r.hasIssues  = issueRecordIds.has(String(r._id));
-      r.issueCount = combinedIssues.filter((i) => String(i.recordId) === String(r._id)).length;
-    });
-
-    const newProfileData = {
-      columns:     newProfile.columns,
-      profiledAt:  new Date(),
-      version:     (dataset.profile?.version || 1) + 1,
-      history: [
-        ...(dataset.profile?.history || []),
-        {
-          version:      (dataset.profile?.version || 1) + 1,
-          profiledAt:   new Date(),
-          qualityScore: newProfile.qualityScore,
-          rowCount:     records.length,
-          driftSummary: drift.summary,
-        },
-      ],
-    };
-
-    if (getDBStatus()) {
-      await Issue.deleteMany({ datasetId: id, status: { $in: ['open', 'in_review'] } });
-      if (combinedIssues.length > 0) {
-        const insertedIssues = await Issue.insertMany(combinedIssues);
-        // Pre-generate remediation proposals so HITL queue has actionable proposals ready
-        for (const iss of insertedIssues.slice(0, 10)) {
-          const rec = records.find((r) => String(r._id) === String(iss.recordId));
-          const proposal = await RemediationService.proposeFix(
-            iss,
-            rec ?? { data: { [iss.field]: iss.currentValue } },
-          );
-          await RemediationAction.create(proposal);
-        }
-      }
-      dataset.qualityScore = newProfile.qualityScore;
-      dataset.dimensions   = newProfile.dimensions;
-      dataset.profile      = newProfileData;
-      await dataset.save();
-    } else {
-      store.issues = store.issues.filter(
-        (i) => String(i.datasetId) !== String(id) || !['open', 'in_review'].includes(i.status),
-      );
-      for (const iss of combinedIssues) {
-        iss._id       = store.generateId();
-        iss.createdAt = new Date();
-        store.issues.push(iss);
-      }
-      for (const iss of combinedIssues.slice(0, 10)) {
-        const rec = records.find((r) => String(r._id) === String(iss.recordId));
-        const proposal = await RemediationService.proposeFix(
-          iss,
-          rec ?? { data: { [iss.field]: iss.currentValue } },
-        );
-        proposal._id = store.generateId();
-        if (!store.remediations) store.remediations = [];
-        store.remediations.push(proposal);
-      }
-      dataset.qualityScore = newProfile.qualityScore;
-      dataset.dimensions   = newProfile.dimensions;
-      dataset.profile      = newProfileData;
-    }
-
-    await cache.del(`profile:${id}`);
-    await cache.delPattern(`records:${id}:*`);
-
-    logger.info({
-      event:       'scan_complete',
-      datasetId:   String(id),
-      totalIssues: combinedIssues.length,
-      duplicates:  duplicateIssues.length,
-      violations:  allViolations.length,
-      score:       newProfile.qualityScore,
-    });
-
-    res.json({
-      success:      true,
-      message:      `Scan complete. Found ${combinedIssues.length} issues (${duplicateIssues.length} duplicates, ${allViolations.length} violations).`,
-      issuesFound:  combinedIssues.length,
-      qualityScore: newProfile.qualityScore,
-      drift,
+    res.status(202).json({
+      success: true,
+      message: 'DQ scan queued. Poll /api/jobs/:jobId/status for results.',
+      jobId,
+      statusUrl: `/api/jobs/${jobId}/status`,
     });
   }),
 );
 
+
 // ── POST /api/datasets/upload ────────────────────────────────────────────
-/** Ingests a CSV file, auto-profiles it, and registers it as a new dataset. */
+/**
+ * Phase 1 (sync, <50ms): Validate file, parse CSV headers, create Dataset
+ *   stub in DB with status='processing', respond with { dataset, jobId }.
+ * Phase 2 (async, BullMQ): Bulk-insert records in 500-row chunks, profile,
+ *   update dataset to status='ready'.
+ * Supports up to 100,000 rows without blocking the HTTP request.
+ */
 router.post(
   '/upload',
   requireAuth(),
@@ -321,109 +238,72 @@ router.post(
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
 
-    const MAX_CSV_ROWS = 50000;
-    const results = [];
-
-    try {
-      const content = req.file.buffer.toString('utf-8');
-      // Basic check for empty or non-text files
-      if (!content || content.trim().length === 0) {
-        return res.status(400).json({ success: false, error: 'Uploaded file is empty.' });
-      }
-
-      const stream = Readable.from(content);
-
-      await new Promise((resolve, reject) => {
-        let rowCount = 0;
-        stream
-          .pipe(csvParser({ strict: false, skipComments: true }))
-          .on('data', (data) => {
-            rowCount++;
-            if (rowCount <= MAX_CSV_ROWS) {
-              results.push(data);
-            }
-          })
-          .on('end', resolve)
-          .on('error', (err) => reject(new Error(`CSV Parse Error: Malformed format or unsupported encoding. ${err.message}`)));
-      });
-    } catch (parseErr) {
-      logger.warn({ event: 'csv_parse_error', error: parseErr.message });
-      return res.status(400).json({
-        success: false,
-        error: parseErr.message || 'Failed to parse CSV file. Please ensure valid UTF-8 encoding and standard comma/delimiter format.',
-      });
+    const content = req.file.buffer.toString('utf-8');
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Uploaded file is empty.' });
     }
 
-    if (results.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No valid data rows found in CSV. Please verify column headers and row contents.',
+    // Quick header validation — parse only first 5 rows synchronously to fail fast
+    const firstLines = content.split('\n').slice(0, 6).join('\n');
+    let headerCheck = [];
+    try {
+      await new Promise((resolve, reject) => {
+        Readable.from(firstLines)
+          .pipe(csvParser({ strict: false }))
+          .on('data', (d) => headerCheck.push(d))
+          .on('end', resolve)
+          .on('error', (e) => reject(new Error(`CSV parse error: ${e.message}`)));
       });
+    } catch (e) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+
+    if (headerCheck.length === 0) {
+      return res.status(400).json({ success: false, error: 'No valid data rows found in CSV.' });
     }
 
     const datasetName = req.body.name || req.file.originalname.replace(/\.[^/.]+$/, '');
     const datasetId   = store.generateId();
 
-    const rawRecords = results.map((row, idx) => ({
-      _id:       store.generateId(),
-      datasetId,
-      rowNumber: idx + 1,
-      data:      row,
-      hasIssues: false,
-      issueCount: 0,
-      version:   1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
-
-    const profile = ProfilerService.profileRecords(rawRecords);
-
-    const dataset = {
+    // Create dataset stub immediately so the UI can poll/display it
+    const datasetStub = {
       _id:         datasetId,
       name:        datasetName,
-      description: req.body.description || `Uploaded CSV — ${rawRecords.length} records`,
+      description: req.body.description || `Uploaded CSV — processing…`,
       sourceType:  'csv',
-      status:      'ready',
-      rowCount:    rawRecords.length,
-      qualityScore: profile.qualityScore,
-      dimensions:  profile.dimensions,
-      profile: {
-        columns:    profile.columns,
-        profiledAt: new Date(),
-        version:    1,
-        history:    [{ version: 1, profiledAt: new Date(), qualityScore: profile.qualityScore, rowCount: rawRecords.length, driftSummary: 'Initial CSV ingest' }],
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      status:      'processing',    // Worker will flip this to 'ready'
+      rowCount:    0,
+      qualityScore: null,
+      createdAt:   new Date(),
+      updatedAt:   new Date(),
     };
 
     if (getDBStatus()) {
-      const { _id: _dsId, ...dsData } = dataset;
+      const { _id: _dsId, ...dsData } = datasetStub;
       const doc = await Dataset.create(dsData);
-      await Record.insertMany(
-        rawRecords.map((r) => {
-          const { _id: _rId, ...rData } = r;
-          return { ...rData, datasetId: doc._id };
-        }),
-      );
-      dataset._id = doc._id;
+      datasetStub._id = String(doc._id);
     } else {
-      store.datasets.unshift(dataset);
-      store.records.push(...rawRecords);
+      store.datasets.unshift(datasetStub);
     }
 
-    logger.info({
-      event:    'csv_upload',
-      name:     datasetName,
-      rows:     rawRecords.length,
-      columns:  profile.columns.length,
-      score:    profile.qualityScore,
-    });
+    // Enqueue the heavy work
+    const { enqueueJob }         = await import('../jobs/jobQueue.js');
+    const { processUploadJob }   = await import('../jobs/scanProcessor.js');
 
-    res.json({
-      success: true,
-      message: `Ingested '${datasetName}' — ${rawRecords.length} rows, ${profile.columns.length} columns.`,
-      data:    dataset,
+    const jobId = await enqueueJob(
+      'upload',
+      { csvContent: content, datasetName, description: req.body.description, datasetId: datasetStub._id },
+      processUploadJob,
+    );
+
+    logger.info({ event: 'csv_upload_enqueued', name: datasetName, jobId, datasetId: datasetStub._id });
+
+    res.status(202).json({
+      success:   true,
+      message:   `Upload queued for '${datasetName}'. Processing up to 100,000 rows in the background.`,
+      data:      datasetStub,
+      jobId,
+      statusUrl: `/api/jobs/${jobId}/status`,
     });
   }),
 );

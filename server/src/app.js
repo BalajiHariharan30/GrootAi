@@ -39,6 +39,7 @@ import ruleRoutes        from './routes/rules.routes.js';
 import issueRoutes       from './routes/issues.routes.js';
 import remediationRoutes from './routes/remediation.routes.js';
 import evalRoutes        from './routes/eval.routes.js';
+import jobRoutes         from './routes/jobs.routes.js';
 
 // MCP
 import { mcpToolDefinitions, handleMCPToolCall } from './mcp/server.js';
@@ -143,6 +144,7 @@ app.use('/api/rules',          ruleRoutes);
 app.use('/api/issues',         issueRoutes);
 app.use('/api/remediation',    requireAuth(), remediationRoutes);
 app.use('/api/eval',           requireAuth({ allowGuest: true }), evalRoutes);
+app.use('/api/jobs',           jobRoutes);
 
 // Versioned aliases — /api/v1/
 app.use('/api/v1/datasets',    datasetRoutes);
@@ -150,6 +152,7 @@ app.use('/api/v1/rules',       ruleRoutes);
 app.use('/api/v1/issues',      issueRoutes);
 app.use('/api/v1/remediation', requireAuth(), remediationRoutes);
 app.use('/api/v1/eval',        requireAuth({ allowGuest: true }), evalRoutes);
+app.use('/api/v1/jobs',        jobRoutes);
 
 // ── Model Context Protocol ────────────────────────────────────────────────
 app.get('/api/mcp/tools', (_req, res) => {
